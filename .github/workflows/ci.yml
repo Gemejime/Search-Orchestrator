@@ -108,8 +108,10 @@ jobs:
             exit 1
           fi
 
-          # 2. Flag direct logging of sensitive fields (bearer tokens, auth headers, raw ACL bitmaps, passwords, secrets)
-          if grep -rnEi 'slog\.(Info|Warn|Error|Debug|Log).*(Authorization|Bearer|caller_acl_bitmap|password|secret_key|api_key|dsn)' cmd/ internal/ pkg/ 2>/dev/null; then
+          # 2. Flag direct logging of sensitive field values (bearer tokens, auth headers, raw ACL bitmaps, passwords, secrets)
+          # Matches slog calls passing sensitive attribute keys (e.g. "authorization", "caller_acl_bitmap", "password") or raw struct fields,
+          # while allowing safe metadata keys like "caller_acl_bitmap_len" or generic error strings.
+          if grep -rnEi 'slog\.(Info|Warn|Error|Debug|Log)[^(]*\([^)]*("(authorization|bearer|caller_acl_bitmap|password|secret_key|api_key|dsn)"|\.(CallerAclBitmap|Authorization|Password|SecretKey|ApiKey|DSN)\b)' cmd/ internal/ pkg/ 2>/dev/null; then
             echo "ERROR: Potential unredacted sensitive field logged. Redact credentials, tokens, and raw ACL bitmaps before emission."
             exit 1
           fi
