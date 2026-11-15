@@ -54,7 +54,7 @@ Aligned with `tasks/Production Grade Backend Concepts.pdf`:
   - Concurrent goroutines for dense HNSW and sparse BM25 unary gRPC calls bounded by `context.WithTimeout(ctx, 20*time.Millisecond)` and `sync.Pool` slice buffers (`pkg/pool/candidate_pool.go`) to prevent GC stalls.
   - Automatic single-index fallback: if one search modality times out or errors, RRF proceeds with surviving candidates from the healthy modality.
 - **Deterministic Circuit Breaking**:
-  - `internal/infrastructure/triton/circuit_breaker.go` trips when Triton Cross-Encoder P99 latency exceeds $35\text{ ms}$ or errors exceed $5\%$, serving Top-10 RRF candidates directly.
+  - `internal/infrastructure/triton/circuit_breaker.go` trips when Triton Cross-Encoder P99 latency exceeds $35\text{ ms}$ or errors exceed $5\%$ (and bypasses reranking if remaining request `ctx.Deadline()` budget is $<15\text{ ms}$), serving Top-10 RRF candidates directly.
 - **High Availability & Redundancy**:
   - 14–16 baseline pods (HPA: 14–32) with `topologySpreadConstraints` across 3 AZs and `PodDisruptionBudget` (`minAvailable: 10`).
   - ArgoCD progressive canary rollout: 10% (10 mins) $\rightarrow$ 25% (15 mins) $\rightarrow$ 100% promotion.
@@ -83,7 +83,7 @@ Aligned with `tasks/Production Grade Backend Concepts.pdf`:
   - *P99 Latency Violation (Page)*: `histogram_quantile(0.99, sum(rate(search_orchestrator_latency_seconds_bucket[5m])) by (le)) > 0.075` for `>3m`.
   - *Triton Reranker Saturation (Warning)*: `rate(search_circuit_breaker_tripped_total[2m]) > 5` for `>1m`.
   - *Search Shard Deadline Exceeded (Warning)*: `sum(rate(search_fanout_stage_errors_total{error="DeadlineExceeded"}[5m])) / sum(rate(search_orchestrator_requests_total[5m])) > 0.01`.
-  - *Cache Invalidation Coherence Lag (Warning)*: `time() - search_last_bitmap_sync_timestamp_seconds > 5` for `>2m`.
+  - *Cache Invalidation Coherence Lag (Warning — if local Pub/Sub bitmap cache enabled)*: `time() - search_last_bitmap_sync_timestamp_seconds > 5` for `>2m`. *(Not applicable when `caller_acl_bitmap` is supplied purely per-request by the Edge Gateway.)*
 - **Health Checks & Graceful Error Handling**:
   - `/healthz` (liveness) and `/ready` (readiness probing Redis, Triton, HNSW/BM25 pools, and drain state); sanitized client error responses.
 

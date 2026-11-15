@@ -6,7 +6,7 @@ This roadmap tracks the implementation milestones detailed in `tasks/RAG Search 
 
 | Phase | Focus Area | Deliverables & Exit Gates | Status |
 | :--- | :--- | :--- | :--- |
-| **Phase 0: Repository & AI Spec Alignment** | Governance, CI/CD & Contracts | - `.gitignore` excluding `tasks/`, `.spectral.yaml`, and GitHub Actions CI (`lint-and-typecheck`, `security-and-logging-audit`, `OpenAPI 3.1 & Doc API Contract Sync`, `test-suites`).<br>- Updated `.ai.md`, `.ai/*`, and `GEMINI.MD` aligned with `rag-search-orchestrator` and `Production Grade Backend Concepts.pdf`. | In Progress |
+| **Phase 0: Repository & AI Spec Alignment** | Governance, CI/CD & Contracts | - `.gitignore` excluding `tasks/`, `.spectral.yaml`, `.golangci.yml`, `Makefile`, and GitHub Actions CI (`lint-and-typecheck`, `security-and-logging-audit`, `OpenAPI 3.1 & Doc API Contract Sync`, `test-suites`).<br>- Updated `.ai.md`, `.ai/*`, and `GEMINI.MD` aligned with `rag-search-orchestrator` and `Production Grade Backend Concepts.pdf`. | In Progress |
 | **Phase 1: Core Domain, Contracts & Staged Cascade** | Pure Go Domain & API Contracts | - `go.mod`, `api/proto/v1/{search_service,types}.proto`, and `api/openapi/openapi.yaml`.<br>- `internal/domain/entity/` (`query_context.go`, `search_candidate.go`, `fused_result.go`).<br>- `internal/domain/ranking/` (`rrf_engine.go` with `k=60`, `cascade_filter.go` enforcing 80 -> 20 -> 10 bounds).<br>- Unit tests verifying staged cascade determinism. | Not Started |
 | **Phase 2: Native `uint32` Roaring Bitmap ACL & Zero-Alloc Pools** | Sub-ms Entitlements & Memory | - `internal/domain/acl/roaring_evaluator.go` performing native `uint32` bitwise AND intersections.<br>- `pkg/pool/candidate_pool.go` (`sync.Pool` reusable slice buffers).<br>- Security & benchmark tests over `100,000` `uint32` IDs asserting zero heap allocations and $<1\text{ ms}$ execution. | Not Started |
 | **Phase 3: Parallel Fan-Out, Triton Inference & Circuit Breaker** | gRPC Clients & Resilience | - `internal/infrastructure/search/dense/hnsw_grpc_client.go` & `sparse/bm25_grpc_client.go` with strict $20\text{ ms}$ `context.WithTimeout` and single-index fallback.<br>- `internal/infrastructure/triton/` (`embedding_client.go`, `reranker_client.go`, `circuit_breaker.go` tripping at $>35\text{ ms}$ or $>5\%$ errors).<br>- `internal/application/usecase/` (`execute_search.go`, `execute_diagnostic_search.go`). | Not Started |
@@ -28,12 +28,12 @@ This roadmap tracks the implementation milestones detailed in `tasks/RAG Search 
 ## 3. Operational Runbooks
 
 ### Runbook 1: Triton GPU Reranker Queue Saturation
-1. Monitor `search_reranker_duration_seconds` / `search_fanout_latency_seconds{component="triton_rerank"}` and Triton pending queue depth.
+1. Monitor `search_fanout_latency_seconds{component="triton_rerank"}` and Triton pending queue depth.
 2. If reranker P99 latency exceeds $35\text{ ms}$ (or errors exceed $5\%$), the internal circuit breaker automatically steps down cross-encoder evaluation and serves Top-10 RRF candidates directly.
 3. Autoscale the Triton GPU worker replica pool if GPU VRAM and tensor core utilization exceed $85\%$.
 
 ### Runbook 2: Diagnosing Elevated Search Fan-Out Timeouts
-1. Inspect `search_fanout_stage_duration_seconds{stage="dense"}` / `{stage="sparse"}` and `search_fanout_stage_errors_total{error="DeadlineExceeded"}`.
+1. Inspect `search_fanout_latency_seconds{component="hnsw_dense"}` / `{component="bm25_sparse"}` and `search_fanout_stage_errors_total{error="DeadlineExceeded"}`.
 2. If timeouts exceed $1\%$ of queries, verify HNSW replica node memory paging or BM25 index garbage collection spikes.
 3. The service degrades gracefully to single-modality candidate retrieval; scale read-replica partitions or rebalance traffic across surviving cluster nodes.
 

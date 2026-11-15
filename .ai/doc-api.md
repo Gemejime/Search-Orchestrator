@@ -123,7 +123,7 @@ Key message contracts:
 1. **Tier 1 Normalized Query Cache**:
    - **Key Format**: `qcache:<tenant_id>:<sha256(Normalize(QueryText) + TenantID + EmbeddingModelVersion)>`
    - **Value**: Compact serialized list of candidate `uint32 doc_id` + `chunk_id` + `parent_key` references (TTL-bounded).
-   - **Tier 2 Rule**: Cache hits MUST still execute in-memory Roaring Bitmap intersection against `caller_acl_bitmap` before hydration. If permissions fail or yield empty set, evict/bypass directly to live fan-out.
+   - **Tier 2 Rule**: Cache hits MUST still execute in-memory Roaring Bitmap intersection against `caller_acl_bitmap` before hydration. If permissions fail or yield an empty set, **bypass** directly to live fan-out without evicting the shared tenant cache entry (to avoid cache thrashing for other callers).
 2. **Parent Container Hydration**:
    - **Operation**: Pipelined `MGET` on pre-warmed parent keys (`parent:<tenant_id>:<doc_id>:<chunk_id>`) for Top-5 surviving chunks (800–1,500 tokens each, target $3\text{–}6\text{ ms}$).
 
@@ -132,7 +132,7 @@ Key message contracts:
 ## 4. Lock-Free Ring Buffer Compliance Telemetry (`rag-telemetry-audit-daemon`)
 
 Asynchronous zero-alloc audit span emitted off the critical search path:
-- **Fields**: `trace_id`, `request_id`, `tenant_id`, `query_hash` *(SHA-256, never raw PII)*, `cache_hit`, `permitted_doc_ids` (`[]uint32`), `reranker_fallback`, `total_latency_us`, `timestamp_unix_ns`.
+- **Fields**: `trace_id`, `request_id`, `tenant_id`, `query_hash` *(SHA-256, never raw PII)*, `cache_hit`, `permitted_doc_ids` *(fixed-capacity `[20]uint32` array + `uint8` count in ring buffer slots to avoid heap slice allocations)*, `reranker_fallback`, `total_latency_us`, `timestamp_unix_ns`.
 
 ---
 
@@ -143,7 +143,7 @@ Asynchronous zero-alloc audit span emitted off the critical search path:
 | `search_orchestrator_requests_total` | Counter | `tenant_id`, `status_code`, `cache_hit` | Total search volume & cache hit ratio |
 | `search_orchestrator_latency_seconds` | Histogram | — | End-to-end latency (buckets 5ms–250ms; P50/P90/P99) |
 | `search_fanout_latency_seconds` | Histogram | `component` | Isolated stage duration (`hnsw_dense`, `bm25_sparse`, `triton_embed`, `triton_rerank`, `redis_hydrate`) |
-| `search_fanout_stage_errors_total` | Counter | `stage`, `error` | Stage errors including `DeadlineExceeded` (20ms fan-out) |
+| `search_fanout_stage_errors_total` | Counter | `component`, `error` | Stage errors including `DeadlineExceeded` (20ms fan-out) |
 | `search_circuit_breaker_tripped_total` | Counter | — | Triton Cross-Encoder fallback activations |
 | `search_roaring_bitmap_eval_duration_seconds` | Histogram | — | Microsecond-level bitwise ACL intersection duration |
-| `search_last_bitmap_sync_timestamp_seconds` | Gauge | — | Epoch timestamp of last entitlement bitmap sync |
+| `search_last_bitmap_sync_timestamp_seconds` | Gauge | — | Epoch timestamp of last entitlement bitmap sync *(applicable only when local Redis Pub/Sub bitmap caching is enabled; per-request `caller_acl_bitmap` is stateless)* |

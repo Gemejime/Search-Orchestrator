@@ -10,7 +10,8 @@ REVISED RETRIEVAL PIPELINE
 │                                    Edge API Gateway                                    │
 │            (Handles auth, rate limiting, and prompt chat dialect compilation)          │
 └───────────────────────────────────────────┬────────────────────────────────────────────┘
-                                            │ gRPC POST /v1/search (Protobuf v3)
+                                            │ gRPC SearchService/Search (Protobuf v3)
+                                            │ or REST POST /v1/search
                                             ▼
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
 │                                 rag-search-orchestrator                                │
@@ -83,7 +84,7 @@ REVISED RETRIEVAL PIPELINE
 
 ### In-Scope
 - **Ingress Query Normalization & Tier 1 Caching**: Text normalization, canonical SHA-256 query hashing, and TTL-bounded Redis 7.2 Cluster lookups.
-- **Triton Embedding Dispatch**: Streaming/batched query vector generation over high-performance gRPC channels to Triton FP16 pools.
+- **Triton Embedding Dispatch**: Unary/batched query vector generation over high-performance gRPC channels (`ModelInfer` with server-side dynamic batching) to Triton FP16 pools.
 - **Parallel Multi-Index Fan-Out**: Concurrent dispatch to dense HNSW vector read replicas and distributed BM25 text shards with strict $20\text{ ms}$ hard deadline contexts.
 - **Native Roaring Bitmap Filtering**: Bitwise AND intersections using pre-assigned, immutable `uint32` document IDs against compressed caller role/session entitlement bitmaps.
 - **Reciprocal Rank Fusion (RRF)**: Merging dense and sparse candidates using normalized scoring constant $k=60$.

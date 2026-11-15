@@ -34,12 +34,12 @@
    - Rerank: Top-10 permitted candidates $\rightarrow$ Triton Cross-Encoder (FP16 batch).
    - Hydrate: Top-5 surviving chunks (logit $\ge \tau$, or promoted RRF fallback) $\rightarrow$ Redis `MGET` parent containers (800–1,500 tokens).
 2. **Native `uint32` Roaring Bitmap Evaluation (`internal/domain/acl/`)**:
-   - Bitwise intersections over `100,000+` `uint32` IDs MUST execute in **$<1\text{ ms}$ with zero heap allocations**.
+   - Hot-path bitwise evaluation (`Contains(uint32)` / in-place intersections) over `100,000+` `uint32` IDs MUST execute in **$<1\text{ ms}$ with zero heap allocations**. Reuse pooled bitmap buffers when unmarshaling request payloads.
    - Never maintain runtime UUID-to-integer translation maps on the hot path.
 3. **Reusable Slice Buffers (`pkg/pool/candidate_pool.go`)**:
    - Use `sync.Pool` for candidate slices and intermediate RRF scoring buffers on the hot path; always reset slice lengths (`buf = buf[:0]`) before returning to the pool.
 4. **Lock-Free Telemetry Ring Buffer (`internal/infrastructure/telemetry/`)**:
-   - Emit compliance trace spans to `rag-telemetry-audit-daemon` via a non-blocking, lock-free ring buffer with zero telemetry heap allocations on the critical search path.
+   - Emit compliance trace spans to `rag-telemetry-audit-daemon` via a non-blocking, lock-free ring buffer using fixed-size backing arrays (zero telemetry heap allocations on the critical search path).
 
 ---
 
@@ -50,7 +50,8 @@
    - If one modality fails or exceeds the deadline, log a structured warning and proceed with single-index fallback.
 2. **Triton Cross-Encoder Circuit Breaker**:
    - Trip the circuit breaker when Triton reranker latency exceeds $35\text{ ms}$ or error rate exceeds $5\%$.
-   - When tripped or when surviving logits are below threshold $\tau$, promote Top-10 un-reranked RRF candidates directly.
+   - Also check remaining request `ctx.Deadline()` budget before dispatching to Triton Cross-Encoder (e.g., bypass if $<15\text{ ms}$ remains) to prevent tail-stacking past the $75\text{ ms}$ P99 SLO.
+   - When tripped, bypassed, or when surviving logits are below threshold $\tau$, promote Top-10 un-reranked RRF candidates directly.
 
 ---
 
