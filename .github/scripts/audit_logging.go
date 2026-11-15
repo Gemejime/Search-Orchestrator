@@ -95,7 +95,19 @@ func scanFile(fset *token.FileSet, path string) ([]Finding, error) {
 	var findings []Finding
 	ast.Inspect(file, func(n ast.Node) bool {
 		call, ok := n.(*ast.CallExpr)
-		if !ok || !isSlogCall(call) {
+		if !ok {
+			return true
+		}
+		if isFmtPrintCall(call) {
+			pos := fset.Position(call.Pos())
+			findings = append(findings, Finding{
+				File:   path,
+				Line:   pos.Line,
+				Reason: "unstructured fmt.Print* call (use structured log/slog)",
+			})
+			return true
+		}
+		if !isSlogCall(call) {
 			return true
 		}
 
@@ -140,6 +152,21 @@ func isSlogCall(call *ast.CallExpr) bool {
 	}
 	ident, ok := sel.X.(*ast.Ident)
 	return ok && ident.Name == "slog"
+}
+
+var fmtPrintMethods = map[string]bool{
+	"Print":   true,
+	"Printf":  true,
+	"Println": true,
+}
+
+func isFmtPrintCall(call *ast.CallExpr) bool {
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok || !fmtPrintMethods[sel.Sel.Name] {
+		return false
+	}
+	ident, ok := sel.X.(*ast.Ident)
+	return ok && ident.Name == "fmt"
 }
 
 func main() {

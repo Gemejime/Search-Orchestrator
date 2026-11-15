@@ -73,3 +73,28 @@ func TestScanDirs_MissingDirFailsScan(t *testing.T) {
 		t.Fatal("expected error for missing directory, got nil")
 	}
 }
+
+func TestScanDirs_FmtPrintForbidden(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	badFile := filepath.Join(tmpDir, "print.go")
+	src := `package handler
+
+import "fmt"
+
+func Debug() {
+	fmt.Println("debug")
+}
+`
+	if err := os.WriteFile(badFile, []byte(src), 0o600); err != nil {
+		t.Fatalf("write badFile: %v", err)
+	}
+
+	findings, err := scanDirs([]string{tmpDir})
+	if err != nil {
+		t.Fatalf("unexpected scan error: %v", err)
+	}
+	if len(findings) != 1 {
+		t.Fatalf("expected 1 finding for fmt.Println, got %d: %+v", len(findings), findings)
+	}
+}
