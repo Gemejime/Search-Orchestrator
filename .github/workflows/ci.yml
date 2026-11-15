@@ -1,0 +1,194 @@
+name: rag-search-orchestrator CI
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master, develop]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.23"
+  SERVICE_NAME: "rag-search-orchestrator"
+
+jobs:
+  lint-and-typecheck:
+    name: Lint & Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Check Go formatting (gofmt -s)
+        run: |
+          if [ ! -f go.mod ]; then
+            echo "go.mod not yet initialized; skipping Go formatting check."
+            exit 0
+          fi
+          unformatted=$(gofmt -s -l .)
+          if [ -n "$unformatted" ]; then
+            echo "ERROR: The following Go files are not formatted with gofmt -s:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Run go vet & compile check
+        run: |
+          if [ ! -f go.mod ]; then
+            echo "go.mod not yet initialized; skipping go vet."
+            exit 0
+          fi
+          go vet ./...
+          go build ./...
+
+      - name: Run golangci-lint
+        if: hashFiles('go.mod') != ''
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.64.5
+
+      - name: Validate Helm charts
+        if: hashFiles('deployments/helm/Chart.yaml') != ''
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.17.0
+      - name: Run helm lint
+        if: hashFiles('deployments/helm/Chart.yaml') != ''
+        run: helm lint deployments/helm
+
+  security-and-logging-audit:
+    name: Security & Secured Logging Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Run govulncheck
+        if: hashFiles('go.mod') != ''
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+          govulncheck ./...
+
+      - name: Run gosec static security scanner
+        if: hashFiles('go.mod') != ''
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@v2.22.1
+          gosec -exclude-generated ./...
+
+      - name: Audit Secured Logging Invariants
+        run: |
+          set -euo pipefail
+          echo "Auditing Go sources for Secured Logging compliance..."
+          if [ ! -d cmd ] && [ ! -d internal ] && [ ! -d pkg ]; then
+            echo "Go source directories not yet initialized; skipping source scan."
+            exit 0
+          fi
+
+          # 1. Forbid unstructured fmt.Print* in production packages (cmd/, internal/, pkg/)
+          if grep -rnE 'fmt\.(Print|Printf|Println)\(' cmd/ internal/ pkg/ 2>/dev/null; then
+            echo "ERROR: Unstructured fmt.Print* found in production code. Use structured JSON logging (log/slog)."
+            exit 1
+          fi
+
+          # 2. Flag direct logging of sensitive fields (bearer tokens, auth headers, raw ACL bitmaps, passwords, secrets)
+          if grep -rnEi 'slog\.(Info|Warn|Error|Debug|Log).*(Authorization|Bearer|caller_acl_bitmap|password|secret_key|api_key|dsn)' cmd/ internal/ pkg/ 2>/dev/null; then
+            echo "ERROR: Potential unredacted sensitive field logged. Redact credentials, tokens, and raw ACL bitmaps before emission."
+            exit 1
+          fi
+
+          echo "Secured Logging audit passed."
+
+  openapi-and-doc-api-contract-sync:
+    name: OpenAPI 3.1 & Doc API Contract Sync
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate OpenAPI 3.1 Specification (Spectral)
+        if: hashFiles('api/openapi/openapi.yaml') != ''
+        uses: stoplightio/spectral-action@v0.8.11
+        with:
+          file_glob: "api/openapi/openapi.yaml"
+          spectral_ruleset: ".spectral.yaml"
+
+      - name: Verify Doc API & OpenAPI Contract Synchronization
+        run: |
+          set -euo pipefail
+          test -f .ai/doc-api.md || { echo "ERROR: .ai/doc-api.md is missing."; exit 1; }
+
+          # If api/openapi/openapi.yaml exists, verify core endpoints are documented in both files
+          if [ -f api/openapi/openapi.yaml ]; then
+            for endpoint in "/v1/search" "/healthz" "/ready" "/metrics"; do
+              if ! grep -q "$endpoint" api/openapi/openapi.yaml; then
+                echo "ERROR: Endpoint $endpoint missing from api/openapi/openapi.yaml"
+                exit 1
+              fi
+              if ! grep -q "$endpoint" .ai/doc-api.md; then
+                echo "ERROR: Endpoint $endpoint missing from .ai/doc-api.md"
+                exit 1
+              fi
+            done
+          fi
+
+          # On pull requests touching Go/Proto/API code, require .ai/doc-api.md or openapi.yaml awareness
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            changed_code=$(git diff --name-only origin/${{ github.base_ref }}...HEAD -- 'cmd/' 'internal/' 'api/' 'pkg/' || true)
+            if [ -n "$changed_code" ]; then
+              echo "Code changes detected in:"
+              echo "$changed_code"
+              changed_docs=$(git diff --name-only origin/${{ github.base_ref }}...HEAD -- '.ai/doc-api.md' 'api/openapi/openapi.yaml' || true)
+              if [ -z "$changed_docs" ]; then
+                echo "WARNING: Code under cmd/, internal/, api/, or pkg/ changed without updating .ai/doc-api.md or api/openapi/openapi.yaml."
+                echo "Ensure Doc API & OpenAPI 3.1 contracts are updated whenever endpoints, schemas, or contracts change."
+              fi
+            fi
+          fi
+
+          echo "OpenAPI 3.1 & Doc API Contract Sync check completed."
+
+  test-suites:
+    name: Test Suites (Unit, Race & Benchmarks)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Run Unit & Race Detector Tests
+        run: |
+          if [ ! -f go.mod ]; then
+            echo "go.mod not yet initialized; skipping Go test suite."
+            exit 0
+          fi
+          go test -v -race -coverprofile=coverage.out ./...
+
+      - name: Run Roaring Bitmap & RRF Zero-Alloc Benchmarks
+        if: hashFiles('test/unit/*_test.go') != ''
+        run: |
+          go test -run=^$ -bench=. -benchmem ./test/unit/...
