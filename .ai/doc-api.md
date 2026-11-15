@@ -80,7 +80,7 @@ Executes the deterministic retrieval pipeline and returns up to Top-5 enriched p
 #### 2. `POST /v1/search/diagnostic`
 Executes the same retrieval cascade while returning per-stage latency breakdowns and candidate score waterfalls (RRF scores, ACL drop counts, raw Cross-Encoder logits, and fallback flags).
 
-- **Response `200 OK`**: Includes all fields from `POST /v1/search` plus `score_trace` (`dense_candidates`, `sparse_candidates`, `rrf_top20_count`, `acl_permitted_count`, `rerank_logits`, `stage_timings_ms`).
+- **Response `200 OK`**: Includes all fields from `POST /v1/search` plus `score_trace` (`dense_count`, `sparse_count`, `rrf_count`, `acl_permitted_count`, `circuit_breaker_tripped`, `rerank_logits` keyed by `chunk_id`, `stage_timings_ms`).
 
 #### 3. `GET /healthz`, `GET /ready`, `GET /metrics`
 - `GET /healthz` $\rightarrow$ `200 OK` `{"status": "alive"}`
@@ -110,17 +110,18 @@ service SearchService {
 
 ### `api/proto/v1/types.proto`
 Key message contracts:
-- `SearchRequest`: `string request_id`, `string tenant_id`, `string query_text`, `bytes caller_acl_bitmap` *(compressed Roaring Bitmap; NEVER logged)*, `int32 top_k` *(default 5, max 5)*, `string embedding_model_version`.
+- `SearchRequest`: `string request_id`, `string tenant_id`, `string query_text`, `bytes caller_acl_bitmap` *(compressed Roaring Bitmap; NEVER logged)*, `int32 top_k` *(0 defaults to 5; valid range 1..5)*, `string embedding_model_version`.
 - `SearchResponse`: `string request_id`, `string tenant_id`, `bool cache_hit`, `bool reranker_fallback`, `repeated EnrichedChunk chunks`, `double latency_ms`.
 - `EnrichedChunk`: `uint32 doc_id`, `string chunk_id`, `string parent_key`, `string text`, `double score`, `map<string, string> metadata`.
 - `DiagnosticSearchResponse`: `SearchResponse response`, `ScoreTrace score_trace`.
-- `ScoreTrace`: `int32 dense_count`, `int32 sparse_count`, `int32 rrf_count`, `int32 acl_permitted_count`, `bool circuit_breaker_tripped`, `map<uint32, double> rerank_logits` *(keyed by candidate `doc_id`)*, `map<string, double> stage_timings_ms`.
+- `ScoreTrace`: `int32 dense_count`, `int32 sparse_count`, `int32 rrf_count`, `int32 acl_permitted_count`, `bool circuit_breaker_tripped`, `map<string, double> rerank_logits` *(keyed by candidate `chunk_id`)*, `map<string, double> stage_timings_ms`.
 
 ---
 
 ## 3. Redis 7.2 Cluster Cache & Hydration Contracts
 
 1. **Tier 1 Normalized Query Cache**:
+   - **Normalization (`Normalize(QueryText)`)**: Unicode NFC, trim leading/trailing whitespace, collapse internal whitespace runs to a single ASCII space, and lowercase.
    - **Key Format**: `qcache:<tenant_id>:<sha256(len_bytes(Normalize(QueryText)) + ":" + Normalize(QueryText) + ":" + len_bytes(TenantID) + ":" + TenantID + ":" + len_bytes(EmbeddingModelVersion) + ":" + EmbeddingModelVersion)>`
    - **Value**: Compact serialized payload containing the original computation's `reranker_fallback` state (`bool`) and a list of candidate references (`uint32 doc_id`, `string chunk_id`, `string parent_key`, and final `double score`) (TTL-bounded), so cache-hit responses populate `reranker_fallback` and per-chunk `score` directly from the cached entry.
    - **Tier 2 Rule**: Cache hits MUST still execute in-memory Roaring Bitmap intersection against `caller_acl_bitmap` before hydration. If permissions fail or yield an empty set, **bypass** directly to live fan-out without evicting the shared tenant cache entry (to avoid cache thrashing for other callers).

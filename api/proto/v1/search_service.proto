@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package rag.search.v1;
+
+option go_package = "github.com/rag-platform/rag-search-orchestrator/api/proto/v1;searchv1";
+
+import "api/proto/v1/types.proto";
+
+// SearchService exposes low-latency staged retrieval and diagnostic endpoints.
+service SearchService {
+  // Search executes the staged retrieval cascade and returns up to Top-5 hydrated parent chunks.
+  rpc Search(SearchRequest) returns (SearchResponse);
+  // DiagnosticSearch executes the retrieval cascade and returns per-stage score and timing waterfalls.
+  rpc DiagnosticSearch(SearchRequest) returns (DiagnosticSearchResponse);
+}
