@@ -51,7 +51,7 @@
 2. **Triton Cross-Encoder Circuit Breaker**:
    - Trip the circuit breaker when Triton reranker latency exceeds $35\text{ ms}$ or error rate exceeds $5\%$.
    - Also check remaining request `ctx.Deadline()` budget before dispatching to Triton Cross-Encoder (e.g., bypass if $<15\text{ ms}$ remains) to prevent tail-stacking past the $75\text{ ms}$ P99 SLO.
-   - When tripped, bypassed, or when surviving logits are below threshold $\tau$, promote Top-10 un-reranked RRF candidates directly.
+   - When tripped, bypassed, or when surviving logits are below threshold $\tau$, promote only ACL-filtered Top-10 un-reranked RRF candidates directly (never unpermitted candidates).
 
 ---
 

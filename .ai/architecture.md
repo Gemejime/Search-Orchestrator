@@ -34,7 +34,7 @@ Aligned with `tasks/Production Grade Backend Concepts.pdf`:
 - **Rate Limiting & Throttling**:
   - Per-tenant/caller token-bucket protection and bounded candidate cascade protecting downstream GPU pools from saturation.
 - **Idempotency**:
-  - Read-only retrieval operations are inherently idempotent; normalized cache keys (`SHA256(Normalize(QueryText) + TenantID + EmbeddingModelVersion)`) ensure deterministic Tier 1 cache resolution.
+  - Read-only retrieval operations are inherently idempotent; normalized cache keys (`SHA256(len_bytes(Normalize(QueryText)) + ":" + Normalize(QueryText) + ":" + len_bytes(TenantID) + ":" + TenantID + ":" + len_bytes(EmbeddingModelVersion) + ":" + EmbeddingModelVersion)`) ensure deterministic Tier 1 cache resolution.
 
 ### Layer 2: Data Persistence & State
 - **Caching (Tier 1 & Tier 2)**:
@@ -54,7 +54,7 @@ Aligned with `tasks/Production Grade Backend Concepts.pdf`:
   - Concurrent goroutines for dense HNSW and sparse BM25 unary gRPC calls bounded by `context.WithTimeout(ctx, 20*time.Millisecond)` and `sync.Pool` slice buffers (`pkg/pool/candidate_pool.go`) to prevent GC stalls.
   - Automatic single-index fallback: if one search modality times out or errors, RRF proceeds with surviving candidates from the healthy modality.
 - **Deterministic Circuit Breaking**:
-  - `internal/infrastructure/triton/circuit_breaker.go` trips when Triton Cross-Encoder P99 latency exceeds $35\text{ ms}$ or errors exceed $5\%$ (and bypasses reranking if remaining request `ctx.Deadline()` budget is $<15\text{ ms}$), serving Top-10 RRF candidates directly.
+  - `internal/infrastructure/triton/circuit_breaker.go` trips when Triton Cross-Encoder P99 latency exceeds $35\text{ ms}$ or errors exceed $5\%$ (and bypasses reranking if remaining request `ctx.Deadline()` budget is $<15\text{ ms}$), serving Top-10 ACL-filtered RRF candidates directly.
 - **High Availability & Redundancy**:
   - 14–16 baseline pods (HPA: 14–32) with `topologySpreadConstraints` across 3 AZs and `PodDisruptionBudget` (`minAvailable: 10`).
   - ArgoCD progressive canary rollout: 10% (10 mins) $\rightarrow$ 25% (15 mins) $\rightarrow$ 100% promotion.

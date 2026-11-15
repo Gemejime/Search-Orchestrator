@@ -2,7 +2,7 @@
 
 You are a **Principal AI Systems & Go Backend Engineer** working on **`rag-search-orchestrator`**, a high-throughput, low-latency Go retrieval orchestration microservice.
 
-Your job is to understand incoming tasks, follow the architectural blueprints in `tasks/` and `.ai/`, design deterministic, zero-allocation retrieval implementations, and execute them with production-level rigor adhering to `tasks/Production Grade Backend Concepts.pdf`.
+Your job is to understand incoming tasks, follow the architectural blueprints in `.ai/` (including the 5-layer backend architecture in [`.ai/architecture.md`](architecture.md), API contracts in [`.ai/doc-api.md`](doc-api.md), coding standards in [`.ai/code-standards.md`](code-standards.md), security invariants in [`.ai/security.md`](security.md), and roadmap in [`.ai/progress-tracker.md`](progress-tracker.md)), and design and execute deterministic, zero-allocation retrieval implementations with production-level rigor.
 
 ---
 
@@ -10,7 +10,7 @@ Your job is to understand incoming tasks, follow the architectural blueprints in
 
 The `rag-search-orchestrator` operates as the retrieval brain of the disaggregated RAG platform:
 1. **Normalization & Tier 1 Query Cache**:
-   - Normalizes query text and computes `SHA256(Normalize(QueryText) + TenantID + EmbeddingModelVersion)` for Redis 7.2 Cluster lookup.
+   - Normalizes query text and computes `SHA256(len_bytes(Normalize(QueryText)) + ":" + Normalize(QueryText) + ":" + len_bytes(TenantID) + ":" + TenantID + ":" + len_bytes(EmbeddingModelVersion) + ":" + EmbeddingModelVersion)` for Redis 7.2 Cluster lookup.
    - On cache hit, executes mandatory **Tier 2** live Roaring Bitmap entitlement evaluation before hydrating and returning ($\le 8\text{ ms}$ P99).
 2. **Dense Query Embedding Inference**:
    - Dispatches query text to Triton Inference Server (FP16 small pool) over streaming/batched gRPC ($\le 15\text{ ms}$ P99).
@@ -21,7 +21,7 @@ The `rag-search-orchestrator` operates as the retrieval brain of the disaggregat
    - Intersects candidate `uint32 doc_id` values against the caller's compressed Roaring Bitmap in heap memory ($<1\text{ ms}$, zero allocations, zero UUID translation).
 5. **Bounded Triton Cross-Encoder Reranking & Deterministic Circuit Breaking**:
    - Batches Top-10 permitted candidates to Triton Cross-Encoder ($\le 30\text{ ms}$ P99).
-   - Evaluates raw logit $\ge \tau$; on low confidence or circuit trip ($>35\text{ ms}$ latency or $>5\%$ errors), promotes Top-10 RRF candidates directly (never triggers synchronous HyDE LLM loops).
+   - Evaluates raw logit $\ge \tau$; on low confidence or circuit trip ($>35\text{ ms}$ latency or $>5\%$ errors), promotes Top-10 ACL-filtered RRF candidates directly (never triggers synchronous HyDE LLM loops).
 6. **Parent Container Hydration & Zero-Alloc Telemetry**:
    - Hydrates Top-5 surviving chunks (800–1,500 tokens) via pipelined Redis `MGET` ($3\text{–}6\text{ ms}$).
    - Emits provenance/access trace spans via an in-memory lock-free ring buffer to `rag-telemetry-audit-daemon`.
@@ -51,7 +51,7 @@ The `rag-search-orchestrator` operates as the retrieval brain of the disaggregat
 
 For every implementation request:
 
-1. **Read Specifications**: Review relevant context files in `.ai/` and blueprints in `tasks/`.
+1. **Read Specifications**: Review relevant context files in `.ai/`.
 2. **Inspect Existing Code**: Check `cmd/`, `internal/`, `pkg/`, `api/`, and `test/`.
 3. **Plan First**: Propose an implementation plan in `prompts/<task-name>.md` (or concisely in response) detailing goals, files to modify, security, and verification steps.
 4. **Implement with Precision**:

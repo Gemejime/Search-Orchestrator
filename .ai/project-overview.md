@@ -17,7 +17,7 @@ REVISED RETRIEVAL PIPELINE
 │                                 rag-search-orchestrator                                │
 │                                                                                        │
 │ 1. Normalization & Tier 1 Query Cache:                                                 │
-│    ├── Hash(NormalizedQueryText + TenantID + Version) ──► Redis 7.2 Cluster            │
+│    ├── SHA256(len_bytes:NormQuery:len_bytes:TenantID:len_bytes:Ver) ──► Redis Cluster  │
 │    └── Hit ──► Tier 2 Fast-Path Bitmap Entitlement Evaluation ──► Direct Return (≤8ms) │
 │                                                                                        │
 │ 2. Embedding Inference:                                                                │
@@ -35,7 +35,7 @@ REVISED RETRIEVAL PIPELINE
 │ 5. Bounded Triton Cross-Encoder Reranking:                                             │
 │    └── Top-10 Permitted Candidates ──► Batched Triton Cross-Encoder (18–30ms P99)      │
 │        ├── Logit >= τ ───────────────► High-Confidence Chunk Accepted                  │
-│        └── Logit < τ (or Degraded) ──► Fallback to Top RRF Candidates (No HyDE loop)   │
+│        └── Logit < τ (or Degraded) ──► Fallback to ACL-Filtered Top RRF (No HyDE loop) │
 │                                                                                        │
 │ 6. Parent Container Hydration:                                                         │
 │    └── Hydrate Top-5 Surviving Chunks (800–1,500t) ──► Redis Cluster MGET (3–6ms)      │
@@ -54,8 +54,8 @@ REVISED RETRIEVAL PIPELINE
 
 1. **Zero-Mapping Entitlement-Aware Retrieval**: Native evaluation of immutable `uint32` document IDs against caller Roaring Bitmaps directly inside orchestrator heap memory, eliminating runtime string-to-integer UUID translation lookups, lock contention, and GC overhead.
 2. **Predictable Staged Candidate Cascade**: Fixed deterministic candidate narrowing (`Top-40 dense + Top-40 sparse -> Top-20 RRF -> ACL filter -> Top-10 cross-encoder -> Top-5 hydrated`) to protect GPU inference pools from queue saturation.
-3. **Normalized Text Query Caching**: Two-tier Redis query caching utilizing normalized semantic query strings and embedding model version hashes (`SHA256(Normalize(QueryText) + TenantID + EmbeddingModelVersion)`), combined with live Tier 2 Roaring Bitmap entitlement verification.
-4. **Deterministic Circuit Breaking**: Fallback to top-ranked RRF candidates when cross-encoder logits drop below threshold $\tau$ or Triton GPU queues stall, strictly eliminating synchronous HyDE LLM expansion loops on the critical path.
+3. **Normalized Text Query Caching**: Two-tier Redis query caching utilizing normalized semantic query strings and embedding model version hashes (`SHA256(len_bytes(Normalize(QueryText)) + ":" + Normalize(QueryText) + ":" + len_bytes(TenantID) + ":" + TenantID + ":" + len_bytes(EmbeddingModelVersion) + ":" + EmbeddingModelVersion)`), combined with live Tier 2 Roaring Bitmap entitlement verification.
+4. **Deterministic Circuit Breaking**: Fallback to top-ranked ACL-filtered RRF candidates when cross-encoder logits drop below threshold $\tau$ or Triton GPU queues stall, strictly eliminating synchronous HyDE LLM expansion loops on the critical path.
 5. **Focused Retrieval Boundary**: Pure focus on ranking, filtering, and parent container hydration, returning clean Protobuf v3 / REST candidate models to upstream gateways without prompt dialect markup compilation.
 6. **Continuous Documentation & Contract Synchronization**: Ensure OpenAPI 3.1 specifications (`api/openapi/openapi.yaml`) and [`.ai/doc-api.md`](doc-api.md) are continuously synchronized with every code change or addition, no matter how small.
 
@@ -88,7 +88,7 @@ REVISED RETRIEVAL PIPELINE
 - **Parallel Multi-Index Fan-Out**: Concurrent dispatch to dense HNSW vector read replicas and distributed BM25 text shards with strict $20\text{ ms}$ hard deadline contexts.
 - **Native Roaring Bitmap Filtering**: Bitwise AND intersections using pre-assigned, immutable `uint32` document IDs against compressed caller role/session entitlement bitmaps.
 - **Reciprocal Rank Fusion (RRF)**: Merging dense and sparse candidates using normalized scoring constant $k=60$.
-- **Triton Cross-Encoder Reranking & Deterministic Fallback**: Batched logit scoring for surviving Top-10 permitted candidates, with safe fallback to Top-10 un-reranked RRF candidates on low logit confidence ($<\tau$) or Triton circuit trip.
+- **Triton Cross-Encoder Reranking & Deterministic Fallback**: Batched logit scoring for surviving Top-10 permitted candidates, with safe fallback to Top-10 ACL-filtered un-reranked RRF candidates on low logit confidence ($<\tau$) or Triton circuit trip.
 - **Parent Chunk Hydration**: Pipelined `MGET` batch fetching of pre-compiled parent containers (800–1,500 tokens) from Redis 7.2 Cluster.
 - **Telemetry Ring Buffer Dispatch**: Zero-allocation lock-free ring buffer emitter pushing compliance trace spans to `rag-telemetry-audit-daemon`.
 

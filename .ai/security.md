@@ -4,7 +4,7 @@
 
 - **Untrusted Ingress Payloads**: Search requests arrive from the Edge API Gateway / downstream LLM clients. `tenant_id`, query text length, `top_k` bounds, and `caller_acl_bitmap` byte payloads must be validated before entering cache lookups or inference pools.
 - **Pre-Inference Entitlement Isolation (Zero-Leakage Guarantee)**: Native `uint32` Roaring Bitmap ACL filtering MUST execute **immediately after RRF blending and strictly before Triton Cross-Encoder reranking**. Unpermitted document chunks must never reach Triton GPU inference buffers or parent container hydration.
-- **Tenant Isolation**: Strict logical separation across all operations. Tier 1 Redis cache keys incorporate `TenantID` (`SHA256(Normalize(QueryText) + TenantID + EmbeddingModelVersion)`), preventing cross-tenant cache poisoning or leakage.
+- **Tenant Isolation**: Strict logical separation across all operations. Tier 1 Redis cache keys incorporate `TenantID` (`SHA256(len_bytes(Normalize(QueryText)) + ":" + Normalize(QueryText) + ":" + len_bytes(TenantID) + ":" + TenantID + ":" + len_bytes(EmbeddingModelVersion) + ":" + EmbeddingModelVersion)`), preventing cross-tenant cache poisoning or leakage.
 - **Tier 2 Cache Entitlement Verification**: A Tier 1 Redis cache hit NEVER bypasses authorization. Cached `uint32` candidate references MUST be intersected with the caller's live `caller_acl_bitmap` in Tier 2 before hydrating or returning results.
 - **Orchestrator Runtime**: Isolated stateless microservice running as `nonroot:nonroot` (UID `65532`) in a `gcr.io/distroless/static:nonroot` container with zero shell utilities and a read-only root filesystem.
 

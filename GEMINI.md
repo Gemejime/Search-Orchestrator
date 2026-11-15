@@ -1,4 +1,4 @@
-# GEMINI.MD - Project Instructions for `rag-search-orchestrator`
+# GEMINI.md - Project Instructions for `rag-search-orchestrator`
 
 This repository implements **`rag-search-orchestrator`**, the mission-critical, low-latency Go retrieval orchestration microservice of the disaggregated RAG platform.
 
@@ -29,7 +29,7 @@ Before planning, editing, or implementing any code, you MUST read and follow:
    - Intersect caller Roaring Bitmaps with `uint32 doc_id` candidates in $<1\text{ ms}$ with zero heap allocations **before** candidates reach Triton Cross-Encoder GPU buffers.
 4. **Fixed Staged Cascade & Deterministic Circuit Breaking**:
    - Enforce Top-40 Dense + Top-40 Sparse ($20\text{ ms}$ deadline) $\rightarrow$ Top-20 RRF (`k=60`) $\rightarrow$ Roaring ACL $\rightarrow$ Top-10 Triton Cross-Encoder $\rightarrow$ Top-5 Redis `MGET` hydrated parent chunks.
-   - On Triton logit $<\tau$, latency $>35\text{ ms}$, or error rate $>5\%$, fall back to Top-10 RRF candidates (never trigger synchronous HyDE LLM loops).
+   - On Triton logit $<\tau$, latency $>35\text{ ms}$, or error rate $>5\%$, fall back to Top-10 ACL-filtered RRF candidates (never trigger synchronous HyDE LLM loops).
 
 ---
 

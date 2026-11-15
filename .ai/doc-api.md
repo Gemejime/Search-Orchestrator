@@ -114,18 +114,18 @@ Key message contracts:
 - `SearchResponse`: `string request_id`, `string tenant_id`, `bool cache_hit`, `bool reranker_fallback`, `repeated EnrichedChunk chunks`, `double latency_ms`.
 - `EnrichedChunk`: `uint32 doc_id`, `string chunk_id`, `string parent_key`, `string text`, `double score`, `map<string, string> metadata`.
 - `DiagnosticSearchResponse`: `SearchResponse response`, `ScoreTrace score_trace`.
-- `ScoreTrace`: `int32 dense_count`, `int32 sparse_count`, `int32 rrf_count`, `int32 acl_permitted_count`, `bool circuit_breaker_tripped`, `map<string, double> stage_timings_ms`.
+- `ScoreTrace`: `int32 dense_count`, `int32 sparse_count`, `int32 rrf_count`, `int32 acl_permitted_count`, `bool circuit_breaker_tripped`, `map<uint32, double> rerank_logits` *(keyed by candidate `doc_id`)*, `map<string, double> stage_timings_ms`.
 
 ---
 
 ## 3. Redis 7.2 Cluster Cache & Hydration Contracts
 
 1. **Tier 1 Normalized Query Cache**:
-   - **Key Format**: `qcache:<tenant_id>:<sha256(Normalize(QueryText) + TenantID + EmbeddingModelVersion)>`
-   - **Value**: Compact serialized list of candidate `uint32 doc_id` + `chunk_id` + `parent_key` references (TTL-bounded).
+   - **Key Format**: `qcache:<tenant_id>:<sha256(len_bytes(Normalize(QueryText)) + ":" + Normalize(QueryText) + ":" + len_bytes(TenantID) + ":" + TenantID + ":" + len_bytes(EmbeddingModelVersion) + ":" + EmbeddingModelVersion)>`
+   - **Value**: Compact serialized payload containing the original computation's `reranker_fallback` state (`bool`) and a list of candidate references (`uint32 doc_id`, `string chunk_id`, `string parent_key`, and final `double score`) (TTL-bounded), so cache-hit responses populate `reranker_fallback` and per-chunk `score` directly from the cached entry.
    - **Tier 2 Rule**: Cache hits MUST still execute in-memory Roaring Bitmap intersection against `caller_acl_bitmap` before hydration. If permissions fail or yield an empty set, **bypass** directly to live fan-out without evicting the shared tenant cache entry (to avoid cache thrashing for other callers).
 2. **Parent Container Hydration**:
-   - **Operation**: Pipelined `MGET` on pre-warmed parent keys (`parent:<tenant_id>:<doc_id>:<chunk_id>`) for Top-5 surviving chunks (800–1,500 tokens each, target $3\text{–}6\text{ ms}$).
+   - **Operation**: Cluster-safe per-slot `MGET` batches or pipelined individual `GET` commands on pre-warmed parent keys (`parent:<tenant_id>:<doc_id>:<chunk_id>`) for Top-5 surviving chunks (800–1,500 tokens each, target $3\text{–}6\text{ ms}$).
 
 ---
 

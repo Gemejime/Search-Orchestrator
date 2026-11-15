@@ -24,7 +24,7 @@ Build this microservice incrementally following a spec-driven workflow:
 2. **Secured Logging**: All logs emitted by `rag-search-orchestrator` must be structured JSON (`log/slog`). Strictly redact `Authorization` headers, bearer tokens, raw `caller_acl_bitmap` bytes, Redis/Triton credentials, and tenant PII/PHI before emission.
 3. **Native `uint32` Roaring Bitmap Entitlements**: Execute sub-millisecond, zero-alloc bitwise AND intersections before Triton reranking; never introduce runtime UUID-to-integer translation maps.
 4. **Fixed Staged Candidate Cascade**: Enforce Top-40 Dense + Top-40 Sparse $\rightarrow$ Top-20 RRF (`k=60`) $\rightarrow$ Roaring Bitmap ACL $\rightarrow$ Top-10 Triton Cross-Encoder $\rightarrow$ Top-5 Hydrated Parent Chunks. No dynamic knee pruning or synchronous HyDE loops.
-5. **Deterministic Circuit Breaking**: Fall back cleanly to Top-10 RRF candidates on Triton logit $<\tau$, latency $>35\text{ ms}$, or error rate $>5\%$.
+5. **Deterministic Circuit Breaking**: Fall back cleanly to Top-10 ACL-filtered RRF candidates on Triton logit $<\tau$, latency $>35\text{ ms}$, or error rate $>5\%$.
 6. **Git Commit Standards**:
    - **Git Commit Frequency**: Commit code as you build. Every working session or phase must contain **at least two git commits**.
    - **Conventional Commit Patterns**: All git commit messages must strictly adhere to the following prefixes:
