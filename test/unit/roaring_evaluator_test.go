@@ -56,6 +56,18 @@ func TestRoaringEvaluator_FailClosedOnEmptyNilCorruptAndClosed(t *testing.T) {
 		t.Fatalf("expected ErrInvalidACLBitmap from pool Acquire, got %v", err)
 	}
 
+	// Structurally invalid bitmap: valid Roaring header and length, but unsorted/duplicate array container values.
+	structurallyInvalid := mustMarshalBitmap(t, 1, 2, 3)
+	// Overwrite the final uint16 element (3) with 1 so the array container is no longer strictly sorted.
+	structurallyInvalid[len(structurallyInvalid)-2] = 1
+	structurallyInvalid[len(structurallyInvalid)-1] = 0
+	if _, err := acl.NewRoaringEvaluator(structurallyInvalid); err != acl.ErrInvalidACLBitmap {
+		t.Fatalf("expected ErrInvalidACLBitmap for structurally invalid bitmap, got %v", err)
+	}
+	if _, err := ep.Acquire(structurallyInvalid); err != acl.ErrInvalidACLBitmap {
+		t.Fatalf("expected ErrInvalidACLBitmap from pool Acquire for structurally invalid bitmap, got %v", err)
+	}
+
 	validBytes := mustMarshalBitmap(t, 10, 20, 30)
 	ev, err := ep.Acquire(validBytes)
 	if err != nil {
@@ -108,15 +120,15 @@ func TestRoaringEvaluator_SparseAndDenseDistributionsWithCascade(t *testing.T) {
 }
 
 func TestRoaringEvaluator_ZeroAllocsOver100kIDs(t *testing.T) {
-	// Build a 100,000-element caller bitmap (even IDs) and a 100,000-element candidate bitmap (all IDs 0..99,999).
+	// Build a 100,000-element caller bitmap (even IDs) and a 100,000-element candidate bitmap (IDs 1..100,000).
 	const count = 100_000
 	callerBM := roaring.New()
 	candTemplate := roaring.New()
 	probe := make([]uint32, count)
 	for i := 0; i < count; i++ {
 		callerBM.Add(uint32(i * 2))
-		candTemplate.Add(uint32(i))
-		probe[i] = uint32(i)
+		candTemplate.Add(uint32(i + 1))
+		probe[i] = uint32(i + 1)
 	}
 	raw, err := callerBM.MarshalBinary()
 	if err != nil {
@@ -143,19 +155,36 @@ func TestRoaringEvaluator_ZeroAllocsOver100kIDs(t *testing.T) {
 
 	// 2. Verify native bitwise AND intersection over 100,000 uint32 IDs executes in <1ms with 0 allocs.
 	candBM := candTemplate.Clone()
-	candBM.RunOptimize()
 	// Warm up once, then measure in-place bitwise AND.
 	ev.IntersectInPlace(candBM)
 	if candBM.GetCardinality() != count/2 {
 		t.Fatalf("expected %d permitted IDs after intersection, got %d", count/2, candBM.GetCardinality())
 	}
 
-	// Re-verify <1ms and 0 allocs on bitwise AND of 100,000-element bitmaps.
-	start := time.Now()
-	intersectAllocs := testing.AllocsPerRun(100, func() {
-		ev.IntersectInPlace(candBM)
+	// Pre-build fresh candidate bitmaps outside the measured section so every run intersects all 100,000 IDs
+	// without including setup allocations or time in the measurement.
+	const runs = 100
+	candRuns := make([]*roaring.Bitmap, runs+1)
+	for i := range candRuns {
+		bm := roaring.New()
+		bm.AddMany(probe)
+		candRuns[i] = bm
+	}
+	runIdx := 0
+	var totalElapsed time.Duration
+	intersectAllocs := testing.AllocsPerRun(runs, func() {
+		bm := candRuns[runIdx]
+		runIdx++
+		iterStart := time.Now()
+		ev.IntersectInPlace(bm)
+		totalElapsed += time.Since(iterStart)
 	})
-	elapsed := time.Since(start) / 100
+	elapsed := totalElapsed / time.Duration(runIdx)
+	for i := 0; i < runIdx; i++ {
+		if candRuns[i].GetCardinality() != count/2 {
+			t.Fatalf("run %d: expected %d permitted IDs after intersection, got %d", i, count/2, candRuns[i].GetCardinality())
+		}
+	}
 	if intersectAllocs != 0 {
 		t.Fatalf("expected 0 heap allocations for 100k IntersectInPlace, got %.2f", intersectAllocs)
 	}
@@ -228,10 +257,10 @@ func BenchmarkRoaringEvaluator_100kIDs(b *testing.B) {
 func BenchmarkRoaringEvaluator_IntersectInPlace100k(b *testing.B) {
 	const count = 100_000
 	callerBM := roaring.New()
-	candBM := roaring.New()
+	candTemplate := roaring.New()
 	for i := 0; i < count; i++ {
 		callerBM.Add(uint32(i * 2))
-		candBM.Add(uint32(i))
+		candTemplate.Add(uint32(i + 1))
 	}
 	raw, err := callerBM.MarshalBinary()
 	if err != nil {
@@ -244,11 +273,17 @@ func BenchmarkRoaringEvaluator_IntersectInPlace100k(b *testing.B) {
 	}
 	defer ev.Close()
 
-	ev.IntersectInPlace(candBM)
-
+	candBM := roaring.New()
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		candBM.Clear()
+		candBM.Or(candTemplate)
+		b.StartTimer()
 		ev.IntersectInPlace(candBM)
+		if candBM.GetCardinality() != count/2 {
+			b.Fatalf("expected %d permitted IDs, got %d", count/2, candBM.GetCardinality())
+		}
 	}
 }

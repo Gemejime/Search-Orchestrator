@@ -49,6 +49,11 @@ func (p *RoaringEvaluatorPool) Acquire(compressed []byte) (*RoaringEvaluator, er
 		p.bitmapPool.Put(bm)
 		return nil, ErrInvalidACLBitmap
 	}
+	if err := bm.Validate(); err != nil {
+		bm.Clear()
+		p.bitmapPool.Put(bm)
+		return nil, ErrInvalidACLBitmap
+	}
 
 	return &RoaringEvaluator{
 		bitmap: bm,
@@ -72,6 +77,9 @@ func NewRoaringEvaluator(compressed []byte) (*RoaringEvaluator, error) {
 
 	bm := roaring.New()
 	if err := bm.UnmarshalBinary(compressed); err != nil {
+		return nil, ErrInvalidACLBitmap
+	}
+	if err := bm.Validate(); err != nil {
 		return nil, ErrInvalidACLBitmap
 	}
 

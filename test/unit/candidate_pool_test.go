@@ -48,6 +48,25 @@ func TestCandidatePool_ReuseAndReset(t *testing.T) {
 		t.Fatalf("expected reset docID buffer len=0, got %d", len(*docIDs2))
 	}
 	cp.PutDocIDs(docIDs2)
+
+	// Verify truncated slots beyond len(*buf) up to cap(*buf) are cleared before pooling.
+	truncSearch := make([]entity.SearchCandidate, 3, pool.DefaultSearchCandidateCap)
+	truncSearch[1] = entity.SearchCandidate{DocID: 11, ChunkID: "truncated_slot_1"}
+	truncSearch[2] = entity.SearchCandidate{DocID: 22, ChunkID: "truncated_slot_2"}
+	truncSearch = truncSearch[:1]
+	cp.PutSearchCandidates(&truncSearch)
+	if resliced := truncSearch[:3]; resliced[1].ChunkID != "" || resliced[2].ChunkID != "" {
+		t.Fatalf("expected truncated SearchCandidate slots to be cleared, got %+v", resliced[1:3])
+	}
+
+	truncFused := make([]entity.FusedCandidate, 3, pool.DefaultFusedCandidateCap)
+	truncFused[1] = entity.FusedCandidate{DocID: 33, ChunkID: "truncated_fused_1"}
+	truncFused[2] = entity.FusedCandidate{DocID: 44, ChunkID: "truncated_fused_2"}
+	truncFused = truncFused[:1]
+	cp.PutFusedCandidates(&truncFused)
+	if resliced := truncFused[:3]; resliced[1].ChunkID != "" || resliced[2].ChunkID != "" {
+		t.Fatalf("expected truncated FusedCandidate slots to be cleared, got %+v", resliced[1:3])
+	}
 }
 
 func TestCandidatePool_DropsOversizedAndHandlesNil(t *testing.T) {

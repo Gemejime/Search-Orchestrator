@@ -71,7 +71,7 @@ func (p *CandidatePool) PutSearchCandidates(buf *[]entity.SearchCandidate) {
 	if cap(*buf) > MaxSearchCandidateCap {
 		return
 	}
-	clear(*buf)
+	clear((*buf)[:cap(*buf)])
 	*buf = (*buf)[:0]
 	p.searchPool.Put(buf)
 }
@@ -92,7 +92,7 @@ func (p *CandidatePool) PutFusedCandidates(buf *[]entity.FusedCandidate) {
 	if cap(*buf) > MaxFusedCandidateCap {
 		return
 	}
-	clear(*buf)
+	clear((*buf)[:cap(*buf)])
 	*buf = (*buf)[:0]
 	p.fusedPool.Put(buf)
 }

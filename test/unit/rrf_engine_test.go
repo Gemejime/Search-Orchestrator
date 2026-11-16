@@ -66,14 +66,27 @@ func TestRRFEngine_Enforces40CapAnd20OutputCap(t *testing.T) {
 		}
 	}
 
+	// Share a candidate at position 41 (index 40) across both modalities; if the Top-40 cap
+	// were not enforced, its combined 2/(60+41) score would rank it #1 in the fused Top-20.
+	dense[40] = entity.SearchCandidate{
+		DocID:    999,
+		ChunkID:  "shared_41",
+		Modality: entity.ModalityDense,
+	}
+	sparse[40] = entity.SearchCandidate{
+		DocID:    999,
+		ChunkID:  "shared_41",
+		Modality: entity.ModalitySparse,
+	}
+
 	fused := engine.Fuse(dense, sparse)
 	if len(fused) != ranking.MaxRRFOutput {
 		t.Fatalf("expected MaxRRFOutput=%d, got %d", ranking.MaxRRFOutput, len(fused))
 	}
 
-	// Verify 41st+ dense/sparse candidates (DocID 41..50, 141..150) were capped out.
+	// Verify 41st+ dense/sparse candidates (including shared position-41 DocID 999) were capped out.
 	for _, c := range fused {
-		if (c.DocID >= 41 && c.DocID <= 50) || c.DocID >= 141 {
+		if c.DocID == 999 || (c.DocID >= 41 && c.DocID <= 50) || c.DocID >= 141 {
 			t.Fatalf("candidate beyond [:40] cap leaked into fused output: %+v", c)
 		}
 	}
