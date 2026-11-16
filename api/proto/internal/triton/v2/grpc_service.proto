@@ -1,0 +1,56 @@
+syntax = "proto3";
+
+package inference;
+
+option go_package = "github.com/rag-platform/rag-search-orchestrator/internal/infrastructure/pb/tritonv2;tritonv2";
+
+// GRPCInferenceService is the standard Triton Inference Server v2 gRPC contract.
+service GRPCInferenceService {
+  rpc ModelInfer(ModelInferRequest) returns (ModelInferResponse);
+  rpc ModelStreamInfer(stream ModelInferRequest) returns (stream ModelStreamInferResponse);
+}
+
+message ModelInferRequest {
+  message InferInputTensor {
+    string name = 1;
+    string datatype = 2;
+    repeated int64 shape = 3;
+    InferTensorContents contents = 5;
+  }
+
+  message InferRequestedOutputTensor {
+    string name = 1;
+  }
+
+  string model_name = 1;
+  string model_version = 2;
+  string id = 3;
+  repeated InferInputTensor inputs = 5;
+  repeated InferRequestedOutputTensor outputs = 6;
+  repeated bytes raw_input_contents = 7;
+}
+
+message ModelInferResponse {
+  message InferOutputTensor {
+    string name = 1;
+    string datatype = 2;
+    repeated int64 shape = 3;
+    InferTensorContents contents = 5;
+  }
+
+  string model_name = 1;
+  string model_version = 2;
+  string id = 3;
+  repeated InferOutputTensor outputs = 5;
+  repeated bytes raw_output_contents = 6;
+}
+
+message ModelStreamInferResponse {
+  string error_message = 1;
+  ModelInferResponse infer_response = 2;
+}
+
+message InferTensorContents {
+  repeated float fp32_contents = 3;
+  repeated bytes bytes_contents = 7;
+}
