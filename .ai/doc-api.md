@@ -110,7 +110,7 @@ service SearchService {
 
 ### `api/proto/v1/types.proto`
 Key message contracts:
-- `SearchRequest`: `string request_id`, `string tenant_id`, `string query_text`, `bytes caller_acl_bitmap` *(compressed Roaring Bitmap; NEVER logged)*, `int32 top_k` *(0 defaults to 5; valid range 1..5)*, `string embedding_model_version`.
+- `SearchRequest`: `string request_id`, `string tenant_id`, `string query_text`, `bytes caller_acl_bitmap` *(standard Roaring binary format compressed Roaring Bitmap; NEVER logged)*, `int32 top_k` *(0 defaults to 5; valid range 1..5)*, `string embedding_model_version`.
 - `SearchResponse`: `string request_id`, `string tenant_id`, `bool cache_hit`, `bool reranker_fallback`, `repeated EnrichedChunk chunks`, `double latency_ms`.
 - `EnrichedChunk`: `uint32 doc_id`, `string chunk_id`, `string parent_key`, `string text`, `double score`, `map<string, string> metadata`.
 - `DiagnosticSearchResponse`: `SearchResponse response`, `ScoreTrace score_trace`.

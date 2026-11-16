@@ -50,7 +50,7 @@ components:
           type: string
           format: byte
           minLength: 1
-          description: Base64-encoded compressed Roaring Bitmap of caller uint32 entitlements (never logged).
+          description: Base64-encoded compressed Roaring Bitmap (standard Roaring binary format) of caller uint32 entitlements (never logged).
           example: "OjAAAAEAAAAAAA=="
         top_k:
           type: integer
