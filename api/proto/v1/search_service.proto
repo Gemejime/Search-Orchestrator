@@ -11,5 +11,5 @@ service SearchService {
   // Search executes the staged retrieval cascade and returns up to Top-5 hydrated parent chunks.
   rpc Search(SearchRequest) returns (SearchResponse);
   // DiagnosticSearch executes the retrieval cascade and returns per-stage score and timing waterfalls.
-  rpc DiagnosticSearch(SearchRequest) returns (DiagnosticSearchResponse);
+  rpc DiagnosticSearch(DiagnosticSearchRequest) returns (DiagnosticSearchResponse);
 }

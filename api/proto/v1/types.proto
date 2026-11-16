@@ -16,6 +16,18 @@ message SearchRequest {
   string embedding_model_version = 6;
 }
 
+// DiagnosticSearchRequest represents a single tenant-scoped diagnostic retrieval request.
+message DiagnosticSearchRequest {
+  string request_id = 1;
+  string tenant_id = 2;
+  string query_text = 3;
+  // Compressed Roaring Bitmap of caller entitlements. NEVER log raw bytes.
+  bytes caller_acl_bitmap = 4;
+  // Maximum chunks to return (0 defaults to 5; valid range 1..5).
+  int32 top_k = 5;
+  string embedding_model_version = 6;
+}
+
 // EnrichedChunk represents a hydrated parent container chunk returned to the caller.
 message EnrichedChunk {
   uint32 doc_id = 1;
@@ -36,6 +48,13 @@ message SearchResponse {
   double latency_ms = 6;
 }
 
+// CandidateLogit pairs a candidate's (doc_id, chunk_id) identity with its raw Cross-Encoder logit.
+message CandidateLogit {
+  uint32 doc_id = 1;
+  string chunk_id = 2;
+  double logit = 3;
+}
+
 // ScoreTrace provides per-stage counts, reranker logits, and timing waterfalls for diagnostics.
 message ScoreTrace {
   int32 dense_count = 1;
@@ -43,8 +62,8 @@ message ScoreTrace {
   int32 rrf_count = 3;
   int32 acl_permitted_count = 4;
   bool circuit_breaker_tripped = 5;
-  // Keyed by chunk_id because multiple chunks sharing a doc_id can enter Top-10.
-  map<string, double> rerank_logits = 6;
+  // Preserves (doc_id, chunk_id) identity so chunks with matching chunk_id in different documents stay distinct.
+  repeated CandidateLogit rerank_logits = 6;
   map<string, double> stage_timings_ms = 7;
 }
 

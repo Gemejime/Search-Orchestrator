@@ -13,6 +13,13 @@ type FusedCandidate struct {
 	Metadata    map[string]string
 }
 
+// CandidateLogit pairs a candidate's (DocID, ChunkID) identity with its raw Cross-Encoder logit.
+type CandidateLogit struct {
+	DocID   uint32
+	ChunkID string
+	Logit   float64
+}
+
 // ScoreTrace captures per-stage candidate counts, logits, and timing breakdowns for diagnostic search.
 type ScoreTrace struct {
 	DenseCount            int32
@@ -20,7 +27,7 @@ type ScoreTrace struct {
 	RRFCount              int32
 	ACLPermittedCount     int32
 	CircuitBreakerTripped bool
-	RerankLogits          map[string]float64
+	RerankLogits          []CandidateLogit
 	StageTimingsMs        map[string]float64
 }
 

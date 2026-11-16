@@ -136,6 +136,30 @@ components:
           format: double
           example: 42.6
 
+    CandidateLogit:
+      type: object
+      required:
+        - doc_id
+        - chunk_id
+        - logit
+      properties:
+        doc_id:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 4294967295
+          description: Immutable native uint32 document identifier.
+          example: 482910
+        chunk_id:
+          type: string
+          description: Unique chunk identifier within the document.
+          example: "chk_482910_004"
+        logit:
+          type: number
+          format: double
+          description: Raw Triton Cross-Encoder logit for this candidate.
+          example: 2.3418
+
     ScoreTrace:
       type: object
       required:
@@ -170,11 +194,10 @@ components:
           description: Whether Triton Cross-Encoder circuit breaker tripped or fallback was used.
           example: false
         rerank_logits:
-          type: object
-          additionalProperties:
-            type: number
-            format: double
-          description: Raw Triton Cross-Encoder logits keyed by chunk_id.
+          type: array
+          items:
+            $ref: "#/components/schemas/CandidateLogit"
+          description: Raw Triton Cross-Encoder logits paired with each candidate's doc_id and chunk_id.
         stage_timings_ms:
           type: object
           additionalProperties:

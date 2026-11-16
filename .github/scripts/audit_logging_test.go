@@ -98,3 +98,98 @@ func Debug() {
 		t.Fatalf("expected 1 finding for fmt.Println, got %d: %+v", len(findings), findings)
 	}
 }
+
+func TestScanDirs_WithPersistentAttributesFlagged(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	badFile := filepath.Join(tmpDir, "with_auth.go")
+	src := `package handler
+
+import "log/slog"
+
+type Request struct {
+	Authorization string
+}
+
+func Handle(logger *slog.Logger, req Request) {
+	reqLogger := logger.With("authorization", req.Authorization)
+	reqLogger.Info("request completed")
+}
+`
+	if err := os.WriteFile(badFile, []byte(src), 0o600); err != nil {
+		t.Fatalf("write badFile: %v", err)
+	}
+
+	findings, err := scanDirs([]string{tmpDir})
+	if err != nil {
+		t.Fatalf("unexpected scan error: %v", err)
+	}
+	if len(findings) != 2 {
+		t.Fatalf("expected 2 findings (key + struct field) in logger.With call, got %d: %+v", len(findings), findings)
+	}
+}
+
+func TestScanDirs_SlogLoggerInstanceAndAliasedFmt(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	badFile := filepath.Join(tmpDir, "aliased.go")
+	src := `package handler
+
+import (
+	myfmt "fmt"
+	"log/slog"
+)
+
+type Request struct {
+	Authorization string
+}
+
+func Handle(logger *slog.Logger, req Request) {
+	logger.Warn("unauthorized", "authorization", req.Authorization)
+	myfmt.Printf("debug: %s\n", "oops")
+}
+`
+	if err := os.WriteFile(badFile, []byte(src), 0o600); err != nil {
+		t.Fatalf("write badFile: %v", err)
+	}
+
+	findings, err := scanDirs([]string{tmpDir})
+	if err != nil {
+		t.Fatalf("unexpected scan error: %v", err)
+	}
+	if len(findings) != 3 {
+		t.Fatalf("expected 3 findings (slog.Logger key+field and aliased fmt.Printf), got %d: %+v", len(findings), findings)
+	}
+}
+
+func TestScanDirs_RedactedMarkersAndBitmapLengthAllowed(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	goodFile := filepath.Join(tmpDir, "redacted_and_len.go")
+	src := `package safe
+
+import "log/slog"
+
+type Request struct {
+	Authorization   string
+	CallerAclBitmap []byte
+}
+
+func LogSafe(logger *slog.Logger, req Request) {
+	slog.Info("auth header", "authorization", "[REDACTED]")
+	logger.Info("acl metadata", "caller_acl_bitmap", len(req.CallerAclBitmap))
+	logger.With("caller_acl_bitmap_len", len(req.CallerAclBitmap)).Info("ok")
+}
+`
+	if err := os.WriteFile(goodFile, []byte(src), 0o600); err != nil {
+		t.Fatalf("write goodFile: %v", err)
+	}
+
+	findings, err := scanDirs([]string{tmpDir})
+	if err != nil {
+		t.Fatalf("unexpected scan error: %v", err)
+	}
+	if len(findings) != 0 {
+		t.Fatalf("expected 0 findings for redaction marker and safe bitmap len, got %+v", findings)
+	}
+}

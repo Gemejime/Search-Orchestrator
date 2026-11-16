@@ -1,8 +1,10 @@
+version: "2"
+
 run:
   timeout: 5m
 
 linters:
-  disable-all: true
+  default: none
   enable:
     - errcheck
     - govet
@@ -10,22 +12,20 @@ linters:
     - unused
     - gosec
     - revive
-
-linters-settings:
-  revive:
+  settings:
+    revive:
+      rules:
+        - name: exported
+          arguments:
+            - checkPrivateReceivers
+    gosec:
+      excludes:
+        - G104 # Covered by errcheck
+  exclusions:
+    paths:
+      - ".*\\.pb\\.go$"
     rules:
-      - name: exported
-        arguments:
-          - checkPrivateReceivers
-  gosec:
-    excludes:
-      - G104 # Covered by errcheck
-
-issues:
-  exclude-files:
-    - ".*\\.pb\\.go$"
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - gosec
-        - errcheck
+      - path: _test\.go
+        linters:
+          - gosec
+          - errcheck
