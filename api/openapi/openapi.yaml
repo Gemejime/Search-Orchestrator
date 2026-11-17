@@ -281,6 +281,12 @@ paths:
           schema:
             type: string
           description: Optional ULID/UUID request correlation identifier.
+        - name: X-Trace-ID
+          in: header
+          required: false
+          schema:
+            type: string
+          description: Optional trace correlation identifier; generated if omitted.
       requestBody:
         required: true
         content:
@@ -302,6 +308,12 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "500":
           description: Internal retrieval error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Retrieval backends are temporarily unavailable.
           content:
             application/json:
               schema:
@@ -331,6 +343,12 @@ paths:
           schema:
             type: string
           description: Optional ULID/UUID request correlation identifier.
+        - name: X-Trace-ID
+          in: header
+          required: false
+          schema:
+            type: string
+          description: Optional trace correlation identifier; generated if omitted.
       requestBody:
         required: true
         content:
@@ -352,6 +370,12 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "500":
           description: Internal retrieval error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Retrieval backends are temporarily unavailable.
           content:
             application/json:
               schema:

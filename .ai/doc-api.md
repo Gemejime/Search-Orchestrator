@@ -36,6 +36,7 @@ Executes the deterministic retrieval pipeline and returns up to Top-5 enriched p
   - `Content-Type: application/json`
   - `X-Tenant-ID: <string>`
   - `X-Request-ID: <ulid|uuid>` *(optional; generated if omitted)*
+  - `X-Trace-ID: <hex>` *(optional; generated if omitted)*
 - **Request Body**:
 ```json
 {
@@ -84,7 +85,7 @@ Executes the same retrieval cascade while returning per-stage latency breakdowns
 
 #### 3. `GET /healthz`, `GET /ready`, `GET /metrics`
 - `GET /healthz` $\rightarrow$ `200 OK` `{"status": "alive"}`
-- `GET /ready` $\rightarrow$ `200 OK` `{"status": "ready", "checks": {"redis": "ok", "triton": "ok", "hnsw": "ok", "bm25": "ok"}}` or `503 Service Unavailable` (`{"status": "draining"}` during `preStop` shutdown).
+- `GET /ready` $\rightarrow$ `200 OK` `{"status": "ready", "checks": {"redis": "ok"}}` or `503 Service Unavailable` (`{"status": "draining"}` during `preStop` shutdown, or `{"status": "not_ready", "checks": {...}}` when a dependency probe fails).
 - `GET /metrics` $\rightarrow$ Prometheus exposition format (`text/plain; version=0.0.4`).
 
 ---
@@ -145,7 +146,7 @@ Asynchronous zero-alloc audit span emitted off the critical search path:
 | :--- | :--- | :--- | :--- |
 | `search_orchestrator_requests_total` | Counter | `tenant_id`, `status_code`, `cache_hit` | Total search volume & cache hit ratio |
 | `search_orchestrator_latency_seconds` | Histogram | — | End-to-end latency (buckets 5ms–250ms; P50/P90/P99) |
-| `search_fanout_latency_seconds` | Histogram | `component` | Isolated stage duration (`hnsw_dense`, `bm25_sparse`, `triton_embed`, `triton_rerank`, `redis_hydrate`) |
+| `search_fanout_latency_seconds` | Histogram | `component` | Isolated stage duration (`hnsw_dense`, `bm25_sparse`, `triton_embed`, `triton_rerank`, `redis_hydrate`, `rrf_acl`) |
 | `search_fanout_stage_errors_total` | Counter | `component`, `error` | Stage errors including `DeadlineExceeded` (20ms fan-out) |
 | `search_circuit_breaker_tripped_total` | Counter | — | Triton Cross-Encoder fallback activations |
 | `search_roaring_bitmap_eval_duration_seconds` | Histogram | — | Microsecond-level bitwise ACL intersection duration |
