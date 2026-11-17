@@ -21,11 +21,11 @@ import (
 )
 
 const (
-	maxRequestBodyBytes = 5 << 20 // 5 MiB
 	maxTenantIDBytes    = 128
 	maxQueryTextBytes   = 8192
 	maxACLBitmapBytes   = 4 << 20 // 4 MiB
 	maxModelVersionLen  = 128
+	maxRequestBodyBytes = 6 << 20 // 6 MiB (accommodates 4 MiB base64-encoded ACL bitmap + bounded JSON fields)
 )
 
 // SearchUseCase defines the primary search execution contract for the HTTP controller.
@@ -236,15 +236,15 @@ func parseHTTPSearchRequest(r *http.Request) (dto.SearchRequest, string, string)
 	limited := io.LimitReader(r.Body, maxRequestBodyBytes+1)
 	bodyBytes, err := io.ReadAll(limited)
 	if err != nil {
-		return dto.SearchRequest{RequestID: headerReqID, TenantID: headerTenantID}, traceID, "Failed to read request body"
+		return dto.SearchRequest{RequestID: headerReqID}, traceID, "Failed to read request body"
 	}
 	if len(bodyBytes) > maxRequestBodyBytes {
-		return dto.SearchRequest{RequestID: headerReqID, TenantID: headerTenantID}, traceID, "Request body exceeds maximum allowed size"
+		return dto.SearchRequest{RequestID: headerReqID}, traceID, "Request body exceeds maximum allowed size"
 	}
 
 	var raw httpSearchRequest
 	if err := json.Unmarshal(bodyBytes, &raw); err != nil {
-		return dto.SearchRequest{RequestID: headerReqID, TenantID: headerTenantID}, traceID, "Malformed JSON request payload"
+		return dto.SearchRequest{RequestID: headerReqID}, traceID, "Malformed JSON request payload"
 	}
 
 	reqID := strings.TrimSpace(raw.RequestID)
@@ -259,11 +259,11 @@ func parseHTTPSearchRequest(r *http.Request) (dto.SearchRequest, string, string)
 	if tenantID == "" {
 		tenantID = headerTenantID
 	} else if headerTenantID != "" && tenantID != headerTenantID {
-		return dto.SearchRequest{RequestID: reqID, TenantID: tenantID}, traceID, "X-Tenant-ID header does not match body tenant_id"
+		return dto.SearchRequest{RequestID: reqID}, traceID, "X-Tenant-ID header does not match body tenant_id"
 	}
 
 	if tenantID == "" || len(tenantID) > maxTenantIDBytes {
-		return dto.SearchRequest{RequestID: reqID, TenantID: tenantID}, traceID, "Invalid tenant_id"
+		return dto.SearchRequest{RequestID: reqID}, traceID, "Invalid tenant_id"
 	}
 	if strings.TrimSpace(raw.QueryText) == "" || len(raw.QueryText) > maxQueryTextBytes {
 		return dto.SearchRequest{RequestID: reqID, TenantID: tenantID}, traceID, "Invalid query_text"

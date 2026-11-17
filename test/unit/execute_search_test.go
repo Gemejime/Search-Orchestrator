@@ -383,7 +383,7 @@ func TestExecuteSearch_Tier1CacheHitAndTier2Bypass(t *testing.T) {
 		t.Fatalf("expected Tier 1/2 cache hit, got %+v", respA)
 	}
 
-	// Caller B only has DocID 1 (< TopK 2) -> Tier 2 bypasses to live fan-out without evicting cache!
+	// Caller B only has DocID 10 (0 cached survivors < TopK 1) -> Tier 2 bypasses to live fan-out without evicting cache!
 	respB, err := uc.Execute(context.Background(), dto.SearchRequest{
 		RequestID:             "r2",
 		TenantID:              "t1",
@@ -400,6 +400,76 @@ func TestExecuteSearch_Tier1CacheHitAndTier2Bypass(t *testing.T) {
 	}
 	if _, stillExists := cache.entries[qc.Tier1CacheKey()]; !stillExists {
 		t.Fatal("shared Tier 1 cache entry must NOT be evicted on Tier 2 ACL bypass")
+	}
+
+	// Caller C has DocIDs [1, 10] with TopK=2 (1 cached survivor < TopK 2) -> Tier 2 bypasses to live fan-out!
+	respC, err := uc.Execute(context.Background(), dto.SearchRequest{
+		RequestID:             "r3",
+		TenantID:              "t1",
+		QueryText:             "cached query",
+		EmbeddingModelVersion: "v1",
+		CallerACLBitmap:       makeRoaringBytes(t, 1, 10),
+		TopK:                  2,
+	})
+	if err != nil {
+		t.Fatalf("Execute C failed: %v", err)
+	}
+	if respC.CacheHit || len(respC.Chunks) != 1 || respC.Chunks[0].DocID != 10 {
+		t.Fatalf("expected live fan-out bypass for partial survivors below TopK, got %+v", respC)
+	}
+}
+
+func TestExecuteSearch_Tier1CacheHitAppliesRerankAndTau(t *testing.T) {
+	t.Parallel()
+
+	qc, err := entity.NewQueryContext("r1", "t1", "cached rerank query", "v1", makeRoaringBytes(t, 1, 2, 3), 2)
+	if err != nil {
+		t.Fatalf("NewQueryContext: %v", err)
+	}
+
+	cache := &stubQueryCache{
+		entries: map[string]repository.Tier1CacheEntry{
+			qc.Tier1CacheKey(): {
+				RerankerFallback: false,
+				Candidates: []repository.CachedCandidate{
+					{DocID: 1, ChunkID: "c1", ParentKey: "p1", Score: 0.9},
+					{DocID: 2, ChunkID: "c2", ParentKey: "p2", Score: 0.8},
+					{DocID: 3, ChunkID: "c3", ParentKey: "p3", Score: 0.7},
+				},
+			},
+		},
+	}
+
+	// DocID 1 has logit 0.5 (< tau 2.0), DocID 2 has logit 3.0 (>= tau), DocID 3 has logit 4.0 (>= tau).
+	// Cache hit must apply reranking + tau threshold just like live results.
+	uc := usecase.NewExecuteSearchUseCase(
+		usecase.SearchConfig{RerankTau: 2.0},
+		usecase.SearchDeps{
+			QueryCache:   cache,
+			Reranker:     &stubReranker{logits: map[uint32]float64{1: 0.5, 2: 3.0, 3: 4.0}},
+			ParentChunks: &stubParentChunks{},
+		},
+	)
+
+	resp, err := uc.Execute(context.Background(), dto.SearchRequest{
+		RequestID:             "r-cache-rerank",
+		TenantID:              "t1",
+		QueryText:             "cached rerank query",
+		EmbeddingModelVersion: "v1",
+		CallerACLBitmap:       makeRoaringBytes(t, 1, 2, 3),
+		TopK:                  2,
+	})
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	if !resp.CacheHit {
+		t.Fatal("expected CacheHit=true")
+	}
+	if resp.RerankerFallback {
+		t.Fatal("expected RerankerFallback=false when 2 candidates meet tau")
+	}
+	if len(resp.Chunks) != 2 || resp.Chunks[0].DocID != 3 || resp.Chunks[1].DocID != 2 {
+		t.Fatalf("expected reranked order [3, 2], got %+v", resp.Chunks)
 	}
 }
 

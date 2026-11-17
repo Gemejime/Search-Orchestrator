@@ -307,19 +307,29 @@ func (uc *ExecuteSearchUseCase) tryTier1Cache(
 		return dto.SearchResponse{}, false, nil
 	}
 
-	chunks, err := uc.hydrate(ctx, qc, permitted[:qc.TopK], nil)
+	rerankCap := len(permitted)
+	if rerankCap > ranking.MaxRerankInputs {
+		rerankCap = ranking.MaxRerankInputs
+	}
+	rerankInput := permitted[:rerankCap]
+
+	selected, rerankerFallback, _, _ := uc.rerankWithGuard(
+		ctx, traceID, qc, rerankInput, permitted, eval, false, nil,
+	)
+
+	chunks, err := uc.hydrate(ctx, qc, selected, nil)
 	if err != nil {
 		return dto.SearchResponse{}, false, err
 	}
 
 	totalDur := time.Since(totalStart)
-	uc.emitAuditSpan(traceID, qc, true, permitted, entry.RerankerFallback, totalDur)
+	uc.emitAuditSpan(traceID, qc, true, permitted, rerankerFallback, totalDur)
 
 	return dto.SearchResponse{
 		RequestID:        qc.RequestID,
 		TenantID:         qc.TenantID,
 		CacheHit:         true,
-		RerankerFallback: entry.RerankerFallback,
+		RerankerFallback: rerankerFallback,
 		Chunks:           chunks,
 		LatencyMs:        float64(totalDur.Microseconds()) / 1000.0,
 	}, true, nil

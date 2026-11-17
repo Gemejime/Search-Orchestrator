@@ -158,7 +158,7 @@ func extractFloat32Tensor(resp *tritonv2.ModelInferResponse, idx int) ([]float32
 			res[i] = float16ToFloat32(bits)
 		}
 		return res, nil
-	default: // FP32
+	case "FP32":
 		if len(raw)%4 != 0 {
 			return nil, fmt.Errorf("triton: invalid FP32 byte length %d", len(raw))
 		}
@@ -168,6 +168,8 @@ func extractFloat32Tensor(resp *tritonv2.ModelInferResponse, idx int) ([]float32
 			res[i] = math.Float32frombits(bits)
 		}
 		return res, nil
+	default:
+		return nil, fmt.Errorf("triton: unsupported output datatype %q", out.GetDatatype())
 	}
 }
 

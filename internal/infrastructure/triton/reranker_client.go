@@ -82,11 +82,11 @@ func (c *RerankerClient) Rerank(
 
 	for i, cand := range candidates {
 		queries[i] = queryBytes
-		if txt, ok := cand.Metadata["text"]; ok && txt != "" {
-			passages[i] = []byte(txt)
-		} else {
-			passages[i] = []byte(cand.ChunkID)
+		txt, ok := cand.Metadata["text"]
+		if !ok || txt == "" {
+			return nil, fmt.Errorf("triton rerank: candidate %s missing text metadata", cand.ChunkID)
 		}
+		passages[i] = []byte(txt)
 	}
 
 	req := &tritonv2.ModelInferRequest{

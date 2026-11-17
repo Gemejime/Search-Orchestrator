@@ -109,20 +109,27 @@ func run(cfg serviceConfig, logger *slog.Logger) int {
 		DialOptions: dialOpts,
 	})
 	if err != nil {
-		logger.Error("failed to initialize hnsw connection pool", slog.String("error", err.Error()))
+		logger.Error("failed to initialize connection pool",
+			slog.String("component", "hnsw_pool"),
+			slog.String("error_class", classifyPoolInitError(err)),
+		)
 		return 1
 	}
 	defer func() { _ = hnswPool.Close() }()
 
 	bm25Pools := make([]*grpcutil.ConnPool, 0, len(cfg.BM25Targets))
-	for _, target := range cfg.BM25Targets {
+	for i, target := range cfg.BM25Targets {
 		p, shardErr := grpcutil.NewConnPool(grpcutil.Config{
 			Targets:     []string{target},
 			PoolSize:    cfg.GRPCPoolSize,
 			DialOptions: dialOpts,
 		})
 		if shardErr != nil {
-			logger.Error("failed to initialize bm25 shard pool", slog.String("error", shardErr.Error()))
+			logger.Error("failed to initialize connection pool",
+				slog.String("component", "bm25_shard_pool"),
+				slog.Int("shard", i),
+				slog.String("error_class", classifyPoolInitError(shardErr)),
+			)
 			return 1
 		}
 		bm25Pools = append(bm25Pools, p)
@@ -139,7 +146,10 @@ func run(cfg serviceConfig, logger *slog.Logger) int {
 		DialOptions: dialOpts,
 	})
 	if err != nil {
-		logger.Error("failed to initialize triton embed pool", slog.String("error", err.Error()))
+		logger.Error("failed to initialize connection pool",
+			slog.String("component", "triton_embed_pool"),
+			slog.String("error_class", classifyPoolInitError(err)),
+		)
 		return 1
 	}
 	defer func() { _ = embedPool.Close() }()
@@ -150,7 +160,10 @@ func run(cfg serviceConfig, logger *slog.Logger) int {
 		DialOptions: dialOpts,
 	})
 	if err != nil {
-		logger.Error("failed to initialize triton rerank pool", slog.String("error", err.Error()))
+		logger.Error("failed to initialize connection pool",
+			slog.String("component", "triton_rerank_pool"),
+			slog.String("error_class", classifyPoolInitError(err)),
+		)
 		return 1
 	}
 	defer func() { _ = rerankPool.Close() }()
@@ -203,6 +216,7 @@ func run(cfg serviceConfig, logger *slog.Logger) int {
 
 	grpcHandler := grpctransport.NewSearchHandler(searchUC, diagnosticUC, metrics)
 	grpcServer := grpc.NewServer(
+		grpc.MaxRecvMsgSize(grpctransport.MaxRecvMsgSizeBytes),
 		grpc.KeepaliveParams(keepalive.ServerParameters{
 			Time:    grpcutil.DefaultKeepaliveTime,
 			Timeout: grpcutil.DefaultKeepaliveTimeout,
@@ -268,20 +282,43 @@ func run(cfg serviceConfig, logger *slog.Logger) int {
 
 	grpcDone := make(chan struct{})
 	go func() {
+		defer close(grpcDone)
 		grpcServer.GracefulStop()
-		close(grpcDone)
 	}()
 
-	select {
-	case <-grpcDone:
-	case <-shutdownCtx.Done():
-		logger.Warn("grpc graceful stop timed out, forcing stop")
-		grpcServer.Stop()
+	httpDone := make(chan error, 1)
+	go func() {
+		httpDone <- httpServer.Shutdown(shutdownCtx)
+	}()
+
+	grpcStopped := false
+	httpStopped := false
+	for !grpcStopped || !httpStopped {
+		select {
+		case <-grpcDone:
+			grpcStopped = true
+		case httpErr := <-httpDone:
+			httpStopped = true
+			if httpErr != nil {
+				logger.Warn("http server shutdown error", slog.String("error", httpErr.Error()))
+			}
+		case <-shutdownCtx.Done():
+			if !grpcStopped {
+				logger.Warn("grpc graceful stop timed out, forcing stop")
+				grpcServer.Stop()
+				<-grpcDone
+				grpcStopped = true
+			}
+			if !httpStopped {
+				httpErr := <-httpDone
+				httpStopped = true
+				if httpErr != nil {
+					logger.Warn("http server shutdown error", slog.String("error", httpErr.Error()))
+				}
+			}
+		}
 	}
 
-	if err := httpServer.Shutdown(shutdownCtx); err != nil {
-		logger.Warn("http server shutdown error", slog.String("error", err.Error()))
-	}
 	if err := ringEmitter.Close(shutdownCtx); err != nil {
 		logger.Warn("ring buffer flush error", slog.String("error", err.Error()))
 	}
@@ -311,6 +348,19 @@ func warmupPools(
 	}
 	if err := rerankPool.Warmup(ctx); err != nil {
 		logger.Warn("triton rerank pool warmup incomplete", slog.String("error", err.Error()))
+	}
+}
+
+func classifyPoolInitError(err error) string {
+	switch {
+	case errors.Is(err, grpcutil.ErrNoTargets):
+		return "no_targets"
+	case errors.Is(err, context.DeadlineExceeded):
+		return "deadline_exceeded"
+	case errors.Is(err, context.Canceled):
+		return "canceled"
+	default:
+		return "dial_failed"
 	}
 }
 

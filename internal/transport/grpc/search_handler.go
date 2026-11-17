@@ -24,6 +24,10 @@ const (
 	maxQueryTextBytes  = 8192
 	maxACLBitmapBytes  = 4 << 20 // 4 MiB
 	maxModelVersionLen = 128
+
+	// MaxRecvMsgSizeBytes bounds incoming gRPC SearchRequest payloads so a max-size
+	// caller_acl_bitmap plus bounded metadata fields and protobuf overhead can reach the handler.
+	MaxRecvMsgSizeBytes = maxACLBitmapBytes + maxQueryTextBytes + maxTenantIDBytes + maxModelVersionLen + (64 << 10)
 )
 
 // SearchUseCase defines the primary search execution contract for the gRPC handler.
@@ -75,7 +79,7 @@ func (h *SearchHandler) Search(ctx context.Context, req *searchv1.SearchRequest)
 		req.GetEmbeddingModelVersion(),
 	)
 	if err != nil {
-		h.metrics.RecordRequest(req.GetTenantId(), codes.InvalidArgument.String(), false, time.Since(start))
+		h.metrics.RecordRequest("", codes.InvalidArgument.String(), false, time.Since(start))
 		return nil, err
 	}
 
@@ -111,7 +115,7 @@ func (h *SearchHandler) DiagnosticSearch(
 		req.GetEmbeddingModelVersion(),
 	)
 	if err != nil {
-		h.metrics.RecordRequest(req.GetTenantId(), codes.InvalidArgument.String(), false, time.Since(start))
+		h.metrics.RecordRequest("", codes.InvalidArgument.String(), false, time.Since(start))
 		return nil, err
 	}
 
