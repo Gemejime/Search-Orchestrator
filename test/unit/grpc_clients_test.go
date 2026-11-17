@@ -170,6 +170,11 @@ func startBufconnPool(t *testing.T, register func(*grpc.Server)) *grpcutil.ConnP
 	if err != nil {
 		t.Fatalf("NewConnPoolFromConns: %v", err)
 	}
+	warmCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := pool.Warmup(warmCtx); err != nil {
+		t.Fatalf("pool.Warmup: %v", err)
+	}
 	t.Cleanup(func() { _ = pool.Close() })
 	return pool
 }
