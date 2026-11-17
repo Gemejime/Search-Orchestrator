@@ -26,7 +26,7 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type DenseSearchServiceClient interface {
-	Search(ctx context.Context, in *DenseSearchRequest, opts ...grpc.CallOption) (*DenseSearchResponse, error)
+	Search(ctx context.Context, in *DenseSearchServiceSearchRequest, opts ...grpc.CallOption) (*DenseSearchServiceSearchResponse, error)
 }
 
 type denseSearchServiceClient struct {
@@ -37,9 +37,9 @@ func NewDenseSearchServiceClient(cc grpc.ClientConnInterface) DenseSearchService
 	return &denseSearchServiceClient{cc}
 }
 
-func (c *denseSearchServiceClient) Search(ctx context.Context, in *DenseSearchRequest, opts ...grpc.CallOption) (*DenseSearchResponse, error) {
+func (c *denseSearchServiceClient) Search(ctx context.Context, in *DenseSearchServiceSearchRequest, opts ...grpc.CallOption) (*DenseSearchServiceSearchResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(DenseSearchResponse)
+	out := new(DenseSearchServiceSearchResponse)
 	err := c.cc.Invoke(ctx, DenseSearchService_Search_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -51,7 +51,7 @@ func (c *denseSearchServiceClient) Search(ctx context.Context, in *DenseSearchRe
 // All implementations must embed UnimplementedDenseSearchServiceServer
 // for forward compatibility.
 type DenseSearchServiceServer interface {
-	Search(context.Context, *DenseSearchRequest) (*DenseSearchResponse, error)
+	Search(context.Context, *DenseSearchServiceSearchRequest) (*DenseSearchServiceSearchResponse, error)
 	mustEmbedUnimplementedDenseSearchServiceServer()
 }
 
@@ -62,7 +62,7 @@ type DenseSearchServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedDenseSearchServiceServer struct{}
 
-func (UnimplementedDenseSearchServiceServer) Search(context.Context, *DenseSearchRequest) (*DenseSearchResponse, error) {
+func (UnimplementedDenseSearchServiceServer) Search(context.Context, *DenseSearchServiceSearchRequest) (*DenseSearchServiceSearchResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Search not implemented")
 }
 func (UnimplementedDenseSearchServiceServer) mustEmbedUnimplementedDenseSearchServiceServer() {}
@@ -87,7 +87,7 @@ func RegisterDenseSearchServiceServer(s grpc.ServiceRegistrar, srv DenseSearchSe
 }
 
 func _DenseSearchService_Search_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DenseSearchRequest)
+	in := new(DenseSearchServiceSearchRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -99,7 +99,7 @@ func _DenseSearchService_Search_Handler(srv interface{}, ctx context.Context, de
 		FullMethod: DenseSearchService_Search_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DenseSearchServiceServer).Search(ctx, req.(*DenseSearchRequest))
+		return srv.(DenseSearchServiceServer).Search(ctx, req.(*DenseSearchServiceSearchRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -128,7 +128,7 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type SparseSearchServiceClient interface {
-	Search(ctx context.Context, in *SparseSearchRequest, opts ...grpc.CallOption) (*SparseSearchResponse, error)
+	Search(ctx context.Context, in *SparseSearchServiceSearchRequest, opts ...grpc.CallOption) (*SparseSearchServiceSearchResponse, error)
 }
 
 type sparseSearchServiceClient struct {
@@ -139,9 +139,9 @@ func NewSparseSearchServiceClient(cc grpc.ClientConnInterface) SparseSearchServi
 	return &sparseSearchServiceClient{cc}
 }
 
-func (c *sparseSearchServiceClient) Search(ctx context.Context, in *SparseSearchRequest, opts ...grpc.CallOption) (*SparseSearchResponse, error) {
+func (c *sparseSearchServiceClient) Search(ctx context.Context, in *SparseSearchServiceSearchRequest, opts ...grpc.CallOption) (*SparseSearchServiceSearchResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(SparseSearchResponse)
+	out := new(SparseSearchServiceSearchResponse)
 	err := c.cc.Invoke(ctx, SparseSearchService_Search_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -153,7 +153,7 @@ func (c *sparseSearchServiceClient) Search(ctx context.Context, in *SparseSearch
 // All implementations must embed UnimplementedSparseSearchServiceServer
 // for forward compatibility.
 type SparseSearchServiceServer interface {
-	Search(context.Context, *SparseSearchRequest) (*SparseSearchResponse, error)
+	Search(context.Context, *SparseSearchServiceSearchRequest) (*SparseSearchServiceSearchResponse, error)
 	mustEmbedUnimplementedSparseSearchServiceServer()
 }
 
@@ -164,7 +164,7 @@ type SparseSearchServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedSparseSearchServiceServer struct{}
 
-func (UnimplementedSparseSearchServiceServer) Search(context.Context, *SparseSearchRequest) (*SparseSearchResponse, error) {
+func (UnimplementedSparseSearchServiceServer) Search(context.Context, *SparseSearchServiceSearchRequest) (*SparseSearchServiceSearchResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Search not implemented")
 }
 func (UnimplementedSparseSearchServiceServer) mustEmbedUnimplementedSparseSearchServiceServer() {}
@@ -189,7 +189,7 @@ func RegisterSparseSearchServiceServer(s grpc.ServiceRegistrar, srv SparseSearch
 }
 
 func _SparseSearchService_Search_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SparseSearchRequest)
+	in := new(SparseSearchServiceSearchRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -201,7 +201,7 @@ func _SparseSearchService_Search_Handler(srv interface{}, ctx context.Context, d
 		FullMethod: SparseSearchService_Search_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(SparseSearchServiceServer).Search(ctx, req.(*SparseSearchRequest))
+		return srv.(SparseSearchServiceServer).Search(ctx, req.(*SparseSearchServiceSearchRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }

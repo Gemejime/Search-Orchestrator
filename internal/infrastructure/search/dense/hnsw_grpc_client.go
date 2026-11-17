@@ -72,7 +72,7 @@ func (c *HNSWClient) SearchDense(
 	}
 
 	client := downstreamv1.NewDenseSearchServiceClient(conn)
-	resp, err := client.Search(callCtx, &downstreamv1.DenseSearchRequest{
+	resp, err := client.Search(callCtx, &downstreamv1.DenseSearchServiceSearchRequest{
 		TenantId: tenantID,
 		Vector:   vector,
 		TopK:     int32(topK),

@@ -39,7 +39,7 @@ type integrationDenseServer struct {
 	downstreamv1.UnimplementedDenseSearchServiceServer
 }
 
-func (integrationDenseServer) Search(context.Context, *downstreamv1.DenseSearchRequest) (*downstreamv1.DenseSearchResponse, error) {
+func (integrationDenseServer) Search(context.Context, *downstreamv1.DenseSearchServiceSearchRequest) (*downstreamv1.DenseSearchServiceSearchResponse, error) {
 	cands := make([]*downstreamv1.DownstreamCandidate, 0, 10)
 	for i := uint32(1); i <= 10; i++ {
 		cands = append(cands, &downstreamv1.DownstreamCandidate{
@@ -49,14 +49,14 @@ func (integrationDenseServer) Search(context.Context, *downstreamv1.DenseSearchR
 			Score:     float64(100 - i),
 		})
 	}
-	return &downstreamv1.DenseSearchResponse{Candidates: cands}, nil
+	return &downstreamv1.DenseSearchServiceSearchResponse{Candidates: cands}, nil
 }
 
 type integrationSparseServer struct {
 	downstreamv1.UnimplementedSparseSearchServiceServer
 }
 
-func (integrationSparseServer) Search(context.Context, *downstreamv1.SparseSearchRequest) (*downstreamv1.SparseSearchResponse, error) {
+func (integrationSparseServer) Search(context.Context, *downstreamv1.SparseSearchServiceSearchRequest) (*downstreamv1.SparseSearchServiceSearchResponse, error) {
 	cands := make([]*downstreamv1.DownstreamCandidate, 0, 10)
 	for i := uint32(1); i <= 10; i++ {
 		cands = append(cands, &downstreamv1.DownstreamCandidate{
@@ -66,7 +66,7 @@ func (integrationSparseServer) Search(context.Context, *downstreamv1.SparseSearc
 			Score:     float64(90 - i),
 		})
 	}
-	return &downstreamv1.SparseSearchResponse{Candidates: cands}, nil
+	return &downstreamv1.SparseSearchServiceSearchResponse{Candidates: cands}, nil
 }
 
 type integrationTritonServer struct {

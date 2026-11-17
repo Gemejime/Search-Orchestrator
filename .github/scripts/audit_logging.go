@@ -175,6 +175,9 @@ func inspectFile(fset *token.FileSet, path string, file *ast.File, typeInfo *typ
 			return true
 		}
 
+		if msgArg := slogMsgArg(methodName, call.Args); msgArg != nil {
+			findings = append(findings, inspectExprForSensitiveFields(fset, path, msgArg, typeInfo, fileImports)...)
+		}
 		attrArgs := slogAttrArgs(methodName, call.Args)
 		findings = append(findings, inspectSlogArgs(fset, path, attrArgs, typeInfo, fileImports)...)
 		return true
@@ -258,6 +261,26 @@ func isSlogLoggerType(t types.Type) bool {
 	return named.Obj().Pkg().Path() == "log/slog" && named.Obj().Name() == "Logger"
 }
 
+func slogMsgArg(methodName string, args []ast.Expr) ast.Expr {
+	var msgIdx int
+	switch methodName {
+	case "With":
+		return nil
+	case "Info", "Warn", "Error", "Debug":
+		msgIdx = 0
+	case "InfoContext", "WarnContext", "ErrorContext", "DebugContext":
+		msgIdx = 1
+	case "Log", "LogAttrs":
+		msgIdx = 2
+	default:
+		return nil
+	}
+	if msgIdx >= len(args) {
+		return nil
+	}
+	return args[msgIdx]
+}
+
 func slogAttrArgs(methodName string, args []ast.Expr) []ast.Expr {
 	var start int
 	switch methodName {
@@ -292,7 +315,7 @@ func inspectSlogArgs(fset *token.FileSet, path string, args []ast.Expr, typeInfo
 			}
 			if len(attrCall.Args) >= 2 {
 				findings = append(findings, checkKeyValuePair(fset, path, attrCall.Args[0], attrCall.Args[1])...)
-				findings = append(findings, inspectExprForSensitiveFields(fset, path, attrCall.Args[1])...)
+				findings = append(findings, inspectExprForSensitiveFields(fset, path, attrCall.Args[1], typeInfo, fileImports)...)
 				continue
 			}
 		}
@@ -305,7 +328,7 @@ func inspectSlogArgs(fset *token.FileSet, path string, args []ast.Expr, typeInfo
 			}
 			findings = append(findings, checkKeyValuePair(fset, path, keyLit, valExpr)...)
 			if valExpr != nil {
-				findings = append(findings, inspectExprForSensitiveFields(fset, path, valExpr)...)
+				findings = append(findings, inspectExprForSensitiveFields(fset, path, valExpr, typeInfo, fileImports)...)
 				i++
 			}
 			continue
@@ -373,11 +396,29 @@ func isSafeDerivedExpr(expr ast.Expr) bool {
 	return ident.Name == "len" || ident.Name == "cap"
 }
 
-func inspectExprForSensitiveFields(fset *token.FileSet, path string, expr ast.Expr) []Finding {
+func inspectExprForSensitiveFields(fset *token.FileSet, path string, expr ast.Expr, typeInfo *types.Info, fileImports map[string]string) []Finding {
 	var findings []Finding
 	ast.Inspect(expr, func(inner ast.Node) bool {
-		if call, ok := inner.(*ast.CallExpr); ok && isSafeDerivedExpr(call) {
-			return false
+		if call, ok := inner.(*ast.CallExpr); ok {
+			if isSafeDerivedExpr(call) {
+				return false
+			}
+			if isSlogAttrCall(call, typeInfo, fileImports) {
+				sel := call.Fun.(*ast.SelectorExpr)
+				if sel.Sel.Name == "Group" && len(call.Args) > 1 {
+					findings = append(findings, inspectSlogArgs(fset, path, call.Args[1:], typeInfo, fileImports)...)
+					return false
+				}
+				if len(call.Args) >= 2 {
+					findings = append(findings, checkKeyValuePair(fset, path, call.Args[0], call.Args[1])...)
+					findings = append(findings, inspectExprForSensitiveFields(fset, path, call.Args[1], typeInfo, fileImports)...)
+					return false
+				}
+			}
+		}
+		if kv, ok := inner.(*ast.KeyValueExpr); ok {
+			findings = append(findings, checkKeyValuePair(fset, path, kv.Key, kv.Value)...)
+			return true
 		}
 		if sel, ok := inner.(*ast.SelectorExpr); ok && sensitiveFields[sel.Sel.Name] {
 			pos := fset.Position(sel.Sel.Pos())

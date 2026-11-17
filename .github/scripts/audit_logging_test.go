@@ -193,3 +193,36 @@ func LogSafe(logger *slog.Logger, req Request) {
 		t.Fatalf("expected 0 findings for redaction marker and safe bitmap len, got %+v", findings)
 	}
 }
+
+func TestScanDirs_NestedKeyValueAndMessageOnlySensitiveFields(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	badFile := filepath.Join(tmpDir, "nested_and_msg.go")
+	src := `package handler
+
+import "log/slog"
+
+type Request struct {
+	Authorization string
+}
+
+func Handle(req Request, token string) {
+	slog.Info(req.Authorization)
+	slog.Info("kv path", "meta", map[string]any{"authorization": token})
+	slog.Info("attr path", slog.Any("meta", map[string]any{"authorization": token}))
+	slog.Info("redacted nested", "meta", map[string]any{"authorization": "[REDACTED]"})
+	slog.Info("redacted nested attr", slog.Any("meta", map[string]any{"authorization": "[REDACTED]"}))
+}
+`
+	if err := os.WriteFile(badFile, []byte(src), 0o600); err != nil {
+		t.Fatalf("write badFile: %v", err)
+	}
+
+	findings, err := scanDirs([]string{tmpDir})
+	if err != nil {
+		t.Fatalf("unexpected scan error: %v", err)
+	}
+	if len(findings) != 3 {
+		t.Fatalf("expected 3 findings (message-only .Authorization + 2 nested unredacted authorization keys), got %d: %+v", len(findings), findings)
+	}
+}

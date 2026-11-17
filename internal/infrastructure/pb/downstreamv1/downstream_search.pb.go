@@ -21,7 +21,7 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type DenseSearchRequest struct {
+type DenseSearchServiceSearchRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	TenantId      string                 `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
 	Vector        []float32              `protobuf:"fixed32,2,rep,packed,name=vector,proto3" json:"vector,omitempty"`
@@ -30,20 +30,20 @@ type DenseSearchRequest struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *DenseSearchRequest) Reset() {
-	*x = DenseSearchRequest{}
+func (x *DenseSearchServiceSearchRequest) Reset() {
+	*x = DenseSearchServiceSearchRequest{}
 	mi := &file_internal_infrastructure_pb_downstreamv1_downstream_search_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *DenseSearchRequest) String() string {
+func (x *DenseSearchServiceSearchRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*DenseSearchRequest) ProtoMessage() {}
+func (*DenseSearchServiceSearchRequest) ProtoMessage() {}
 
-func (x *DenseSearchRequest) ProtoReflect() protoreflect.Message {
+func (x *DenseSearchServiceSearchRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_internal_infrastructure_pb_downstreamv1_downstream_search_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -55,53 +55,53 @@ func (x *DenseSearchRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use DenseSearchRequest.ProtoReflect.Descriptor instead.
-func (*DenseSearchRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use DenseSearchServiceSearchRequest.ProtoReflect.Descriptor instead.
+func (*DenseSearchServiceSearchRequest) Descriptor() ([]byte, []int) {
 	return file_internal_infrastructure_pb_downstreamv1_downstream_search_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *DenseSearchRequest) GetTenantId() string {
+func (x *DenseSearchServiceSearchRequest) GetTenantId() string {
 	if x != nil {
 		return x.TenantId
 	}
 	return ""
 }
 
-func (x *DenseSearchRequest) GetVector() []float32 {
+func (x *DenseSearchServiceSearchRequest) GetVector() []float32 {
 	if x != nil {
 		return x.Vector
 	}
 	return nil
 }
 
-func (x *DenseSearchRequest) GetTopK() int32 {
+func (x *DenseSearchServiceSearchRequest) GetTopK() int32 {
 	if x != nil {
 		return x.TopK
 	}
 	return 0
 }
 
-type DenseSearchResponse struct {
+type DenseSearchServiceSearchResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Candidates    []*DownstreamCandidate `protobuf:"bytes,1,rep,name=candidates,proto3" json:"candidates,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *DenseSearchResponse) Reset() {
-	*x = DenseSearchResponse{}
+func (x *DenseSearchServiceSearchResponse) Reset() {
+	*x = DenseSearchServiceSearchResponse{}
 	mi := &file_internal_infrastructure_pb_downstreamv1_downstream_search_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *DenseSearchResponse) String() string {
+func (x *DenseSearchServiceSearchResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*DenseSearchResponse) ProtoMessage() {}
+func (*DenseSearchServiceSearchResponse) ProtoMessage() {}
 
-func (x *DenseSearchResponse) ProtoReflect() protoreflect.Message {
+func (x *DenseSearchServiceSearchResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_internal_infrastructure_pb_downstreamv1_downstream_search_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -113,19 +113,19 @@ func (x *DenseSearchResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use DenseSearchResponse.ProtoReflect.Descriptor instead.
-func (*DenseSearchResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use DenseSearchServiceSearchResponse.ProtoReflect.Descriptor instead.
+func (*DenseSearchServiceSearchResponse) Descriptor() ([]byte, []int) {
 	return file_internal_infrastructure_pb_downstreamv1_downstream_search_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *DenseSearchResponse) GetCandidates() []*DownstreamCandidate {
+func (x *DenseSearchServiceSearchResponse) GetCandidates() []*DownstreamCandidate {
 	if x != nil {
 		return x.Candidates
 	}
 	return nil
 }
 
-type SparseSearchRequest struct {
+type SparseSearchServiceSearchRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	TenantId      string                 `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
 	QueryText     string                 `protobuf:"bytes,2,opt,name=query_text,json=queryText,proto3" json:"query_text,omitempty"`
@@ -134,20 +134,20 @@ type SparseSearchRequest struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *SparseSearchRequest) Reset() {
-	*x = SparseSearchRequest{}
+func (x *SparseSearchServiceSearchRequest) Reset() {
+	*x = SparseSearchServiceSearchRequest{}
 	mi := &file_internal_infrastructure_pb_downstreamv1_downstream_search_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *SparseSearchRequest) String() string {
+func (x *SparseSearchServiceSearchRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*SparseSearchRequest) ProtoMessage() {}
+func (*SparseSearchServiceSearchRequest) ProtoMessage() {}
 
-func (x *SparseSearchRequest) ProtoReflect() protoreflect.Message {
+func (x *SparseSearchServiceSearchRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_internal_infrastructure_pb_downstreamv1_downstream_search_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -159,53 +159,53 @@ func (x *SparseSearchRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use SparseSearchRequest.ProtoReflect.Descriptor instead.
-func (*SparseSearchRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use SparseSearchServiceSearchRequest.ProtoReflect.Descriptor instead.
+func (*SparseSearchServiceSearchRequest) Descriptor() ([]byte, []int) {
 	return file_internal_infrastructure_pb_downstreamv1_downstream_search_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *SparseSearchRequest) GetTenantId() string {
+func (x *SparseSearchServiceSearchRequest) GetTenantId() string {
 	if x != nil {
 		return x.TenantId
 	}
 	return ""
 }
 
-func (x *SparseSearchRequest) GetQueryText() string {
+func (x *SparseSearchServiceSearchRequest) GetQueryText() string {
 	if x != nil {
 		return x.QueryText
 	}
 	return ""
 }
 
-func (x *SparseSearchRequest) GetTopK() int32 {
+func (x *SparseSearchServiceSearchRequest) GetTopK() int32 {
 	if x != nil {
 		return x.TopK
 	}
 	return 0
 }
 
-type SparseSearchResponse struct {
+type SparseSearchServiceSearchResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Candidates    []*DownstreamCandidate `protobuf:"bytes,1,rep,name=candidates,proto3" json:"candidates,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *SparseSearchResponse) Reset() {
-	*x = SparseSearchResponse{}
+func (x *SparseSearchServiceSearchResponse) Reset() {
+	*x = SparseSearchServiceSearchResponse{}
 	mi := &file_internal_infrastructure_pb_downstreamv1_downstream_search_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *SparseSearchResponse) String() string {
+func (x *SparseSearchServiceSearchResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*SparseSearchResponse) ProtoMessage() {}
+func (*SparseSearchServiceSearchResponse) ProtoMessage() {}
 
-func (x *SparseSearchResponse) ProtoReflect() protoreflect.Message {
+func (x *SparseSearchServiceSearchResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_internal_infrastructure_pb_downstreamv1_downstream_search_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -217,12 +217,12 @@ func (x *SparseSearchResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use SparseSearchResponse.ProtoReflect.Descriptor instead.
-func (*SparseSearchResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use SparseSearchServiceSearchResponse.ProtoReflect.Descriptor instead.
+func (*SparseSearchServiceSearchResponse) Descriptor() ([]byte, []int) {
 	return file_internal_infrastructure_pb_downstreamv1_downstream_search_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *SparseSearchResponse) GetCandidates() []*DownstreamCandidate {
+func (x *SparseSearchServiceSearchResponse) GetCandidates() []*DownstreamCandidate {
 	if x != nil {
 		return x.Candidates
 	}
@@ -309,20 +309,20 @@ var File_internal_infrastructure_pb_downstreamv1_downstream_search_proto protore
 
 const file_internal_infrastructure_pb_downstreamv1_downstream_search_proto_rawDesc = "" +
 	"\n" +
-	"?internal/infrastructure/pb/downstreamv1/downstream_search.proto\x12\x11rag.downstream.v1\"F\n" +
-	"\x12DenseSearchRequest\x12\x11\n" +
+	"?internal/infrastructure/pb/downstreamv1/downstream_search.proto\x12\x11rag.downstream.v1\"S\n" +
+	"\x1fDenseSearchServiceSearchRequest\x12\x11\n" +
 	"\ttenant_id\x18\x01 \x01(\t\x12\x0e\n" +
 	"\x06vector\x18\x02 \x03(\x02\x12\r\n" +
-	"\x05top_k\x18\x03 \x01(\x05\"Q\n" +
-	"\x13DenseSearchResponse\x12:\n" +
+	"\x05top_k\x18\x03 \x01(\x05\"^\n" +
+	" DenseSearchServiceSearchResponse\x12:\n" +
 	"\n" +
-	"candidates\x18\x01 \x03(\v2&.rag.downstream.v1.DownstreamCandidate\"K\n" +
-	"\x13SparseSearchRequest\x12\x11\n" +
+	"candidates\x18\x01 \x03(\v2&.rag.downstream.v1.DownstreamCandidate\"X\n" +
+	" SparseSearchServiceSearchRequest\x12\x11\n" +
 	"\ttenant_id\x18\x01 \x01(\t\x12\x12\n" +
 	"\n" +
 	"query_text\x18\x02 \x01(\t\x12\r\n" +
-	"\x05top_k\x18\x03 \x01(\x05\"R\n" +
-	"\x14SparseSearchResponse\x12:\n" +
+	"\x05top_k\x18\x03 \x01(\x05\"_\n" +
+	"!SparseSearchServiceSearchResponse\x12:\n" +
 	"\n" +
 	"candidates\x18\x01 \x03(\v2&.rag.downstream.v1.DownstreamCandidate\"\xd3\x01\n" +
 	"\x13DownstreamCandidate\x12\x0e\n" +
@@ -334,11 +334,11 @@ const file_internal_infrastructure_pb_downstreamv1_downstream_search_proto_rawDe
 	"\bmetadata\x18\x05 \x03(\v24.rag.downstream.v1.DownstreamCandidate.MetadataEntry\x1a/\n" +
 	"\rMetadataEntry\x12\v\n" +
 	"\x03key\x18\x01 \x01(\t\x12\r\n" +
-	"\x05value\x18\x02 \x01(\t:\x028\x012m\n" +
-	"\x12DenseSearchService\x12W\n" +
-	"\x06Search\x12%.rag.downstream.v1.DenseSearchRequest\x1a&.rag.downstream.v1.DenseSearchResponse2p\n" +
-	"\x13SparseSearchService\x12Y\n" +
-	"\x06Search\x12&.rag.downstream.v1.SparseSearchRequest\x1a'.rag.downstream.v1.SparseSearchResponseBfZdgithub.com/rag-platform/rag-search-orchestrator/internal/infrastructure/pb/downstreamv1;downstreamv1b\x06proto3"
+	"\x05value\x18\x02 \x01(\t:\x028\x012\x87\x01\n" +
+	"\x12DenseSearchService\x12q\n" +
+	"\x06Search\x122.rag.downstream.v1.DenseSearchServiceSearchRequest\x1a3.rag.downstream.v1.DenseSearchServiceSearchResponse2\x8a\x01\n" +
+	"\x13SparseSearchService\x12s\n" +
+	"\x06Search\x123.rag.downstream.v1.SparseSearchServiceSearchRequest\x1a4.rag.downstream.v1.SparseSearchServiceSearchResponseBfZdgithub.com/rag-platform/rag-search-orchestrator/internal/infrastructure/pb/downstreamv1;downstreamv1b\x06proto3"
 
 var (
 	file_internal_infrastructure_pb_downstreamv1_downstream_search_proto_rawDescOnce sync.Once
@@ -354,21 +354,21 @@ func file_internal_infrastructure_pb_downstreamv1_downstream_search_proto_rawDes
 
 var file_internal_infrastructure_pb_downstreamv1_downstream_search_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_internal_infrastructure_pb_downstreamv1_downstream_search_proto_goTypes = []any{
-	(*DenseSearchRequest)(nil),   // 0: rag.downstream.v1.DenseSearchRequest
-	(*DenseSearchResponse)(nil),  // 1: rag.downstream.v1.DenseSearchResponse
-	(*SparseSearchRequest)(nil),  // 2: rag.downstream.v1.SparseSearchRequest
-	(*SparseSearchResponse)(nil), // 3: rag.downstream.v1.SparseSearchResponse
-	(*DownstreamCandidate)(nil),  // 4: rag.downstream.v1.DownstreamCandidate
-	nil,                          // 5: rag.downstream.v1.DownstreamCandidate.MetadataEntry
+	(*DenseSearchServiceSearchRequest)(nil),   // 0: rag.downstream.v1.DenseSearchServiceSearchRequest
+	(*DenseSearchServiceSearchResponse)(nil),  // 1: rag.downstream.v1.DenseSearchServiceSearchResponse
+	(*SparseSearchServiceSearchRequest)(nil),  // 2: rag.downstream.v1.SparseSearchServiceSearchRequest
+	(*SparseSearchServiceSearchResponse)(nil), // 3: rag.downstream.v1.SparseSearchServiceSearchResponse
+	(*DownstreamCandidate)(nil),               // 4: rag.downstream.v1.DownstreamCandidate
+	nil,                                       // 5: rag.downstream.v1.DownstreamCandidate.MetadataEntry
 }
 var file_internal_infrastructure_pb_downstreamv1_downstream_search_proto_depIdxs = []int32{
-	4, // 0: rag.downstream.v1.DenseSearchResponse.candidates:type_name -> rag.downstream.v1.DownstreamCandidate
-	4, // 1: rag.downstream.v1.SparseSearchResponse.candidates:type_name -> rag.downstream.v1.DownstreamCandidate
+	4, // 0: rag.downstream.v1.DenseSearchServiceSearchResponse.candidates:type_name -> rag.downstream.v1.DownstreamCandidate
+	4, // 1: rag.downstream.v1.SparseSearchServiceSearchResponse.candidates:type_name -> rag.downstream.v1.DownstreamCandidate
 	5, // 2: rag.downstream.v1.DownstreamCandidate.metadata:type_name -> rag.downstream.v1.DownstreamCandidate.MetadataEntry
-	0, // 3: rag.downstream.v1.DenseSearchService.Search:input_type -> rag.downstream.v1.DenseSearchRequest
-	2, // 4: rag.downstream.v1.SparseSearchService.Search:input_type -> rag.downstream.v1.SparseSearchRequest
-	1, // 5: rag.downstream.v1.DenseSearchService.Search:output_type -> rag.downstream.v1.DenseSearchResponse
-	3, // 6: rag.downstream.v1.SparseSearchService.Search:output_type -> rag.downstream.v1.SparseSearchResponse
+	0, // 3: rag.downstream.v1.DenseSearchService.Search:input_type -> rag.downstream.v1.DenseSearchServiceSearchRequest
+	2, // 4: rag.downstream.v1.SparseSearchService.Search:input_type -> rag.downstream.v1.SparseSearchServiceSearchRequest
+	1, // 5: rag.downstream.v1.DenseSearchService.Search:output_type -> rag.downstream.v1.DenseSearchServiceSearchResponse
+	3, // 6: rag.downstream.v1.SparseSearchService.Search:output_type -> rag.downstream.v1.SparseSearchServiceSearchResponse
 	5, // [5:7] is the sub-list for method output_type
 	3, // [3:5] is the sub-list for method input_type
 	3, // [3:3] is the sub-list for extension type_name

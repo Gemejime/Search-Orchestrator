@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GO_VERSION: "1.25.x"
+  GO_VERSION: "1.26.x"
   SERVICE_NAME: "rag-search-orchestrator"
 
 jobs:
@@ -57,7 +57,7 @@ jobs:
         if: hashFiles('go.mod') != ''
         uses: golangci/golangci-lint-action@v7
         with:
-          version: v2.5.0
+          version: v2.11.0
 
       - name: Validate Helm charts
         if: hashFiles('deployments/helm/Chart.yaml') != ''

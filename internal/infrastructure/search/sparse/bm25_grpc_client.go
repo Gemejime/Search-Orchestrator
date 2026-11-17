@@ -94,7 +94,7 @@ func (c *BM25Client) SearchSparse(
 				return
 			}
 			client := downstreamv1.NewSparseSearchServiceClient(conn)
-			resp, err := client.Search(callCtx, &downstreamv1.SparseSearchRequest{
+			resp, err := client.Search(callCtx, &downstreamv1.SparseSearchServiceSearchRequest{
 				TenantId:  tenantID,
 				QueryText: queryText,
 				TopK:      int32(topK),

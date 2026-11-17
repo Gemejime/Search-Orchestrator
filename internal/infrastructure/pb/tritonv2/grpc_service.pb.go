@@ -235,8 +235,8 @@ func (x *ModelStreamInferResponse) GetInferResponse() *ModelInferResponse {
 
 type InferTensorContents struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Fp32Contents  []float32              `protobuf:"fixed32,3,rep,packed,name=fp32_contents,json=fp32Contents,proto3" json:"fp32_contents,omitempty"`
-	BytesContents [][]byte               `protobuf:"bytes,7,rep,name=bytes_contents,json=bytesContents,proto3" json:"bytes_contents,omitempty"`
+	Fp32Contents  []float32              `protobuf:"fixed32,6,rep,packed,name=fp32_contents,json=fp32Contents,proto3" json:"fp32_contents,omitempty"`
+	BytesContents [][]byte               `protobuf:"bytes,8,rep,name=bytes_contents,json=bytesContents,proto3" json:"bytes_contents,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -503,8 +503,8 @@ const file_internal_infrastructure_pb_tritonv2_grpc_service_proto_rawDesc = "" +
 	"\rerror_message\x18\x01 \x01(\t\x125\n" +
 	"\x0einfer_response\x18\x02 \x01(\v2\x1d.inference.ModelInferResponse\"D\n" +
 	"\x13InferTensorContents\x12\x15\n" +
-	"\rfp32_contents\x18\x03 \x03(\x02\x12\x16\n" +
-	"\x0ebytes_contents\x18\a \x03(\f2\xbc\x01\n" +
+	"\rfp32_contents\x18\x06 \x03(\x02\x12\x16\n" +
+	"\x0ebytes_contents\x18\b \x03(\f2\xbc\x01\n" +
 	"\x14GRPCInferenceService\x12I\n" +
 	"\n" +
 	"ModelInfer\x12\x1c.inference.ModelInferRequest\x1a\x1d.inference.ModelInferResponse\x12Y\n" +

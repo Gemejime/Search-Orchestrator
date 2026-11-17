@@ -51,6 +51,6 @@ message ModelStreamInferResponse {
 }
 
 message InferTensorContents {
-  repeated float fp32_contents = 3;
-  repeated bytes bytes_contents = 7;
+  repeated float fp32_contents = 6;
+  repeated bytes bytes_contents = 8;
 }

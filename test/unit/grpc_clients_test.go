@@ -33,7 +33,7 @@ type mockDenseServer struct {
 	err        error
 }
 
-func (m *mockDenseServer) Search(ctx context.Context, req *downstreamv1.DenseSearchRequest) (*downstreamv1.DenseSearchResponse, error) {
+func (m *mockDenseServer) Search(ctx context.Context, req *downstreamv1.DenseSearchServiceSearchRequest) (*downstreamv1.DenseSearchServiceSearchResponse, error) {
 	if m.delay > 0 {
 		select {
 		case <-time.After(m.delay):
@@ -44,7 +44,7 @@ func (m *mockDenseServer) Search(ctx context.Context, req *downstreamv1.DenseSea
 	if m.err != nil {
 		return nil, m.err
 	}
-	return &downstreamv1.DenseSearchResponse{Candidates: m.candidates}, nil
+	return &downstreamv1.DenseSearchServiceSearchResponse{Candidates: m.candidates}, nil
 }
 
 type mockSparseServer struct {
@@ -54,7 +54,7 @@ type mockSparseServer struct {
 	err        error
 }
 
-func (m *mockSparseServer) Search(ctx context.Context, req *downstreamv1.SparseSearchRequest) (*downstreamv1.SparseSearchResponse, error) {
+func (m *mockSparseServer) Search(ctx context.Context, req *downstreamv1.SparseSearchServiceSearchRequest) (*downstreamv1.SparseSearchServiceSearchResponse, error) {
 	if m.delay > 0 {
 		select {
 		case <-time.After(m.delay):
@@ -65,16 +65,18 @@ func (m *mockSparseServer) Search(ctx context.Context, req *downstreamv1.SparseS
 	if m.err != nil {
 		return nil, m.err
 	}
-	return &downstreamv1.SparseSearchResponse{Candidates: m.candidates}, nil
+	return &downstreamv1.SparseSearchServiceSearchResponse{Candidates: m.candidates}, nil
 }
 
 type mockTritonServer struct {
 	tritonv2.UnimplementedGRPCInferenceServiceServer
-	embedFP16  bool
-	embedVec   []float32
-	embedErr   string
-	rerankResp []float32
-	delay      time.Duration
+	embedFP16     bool
+	embedDatatype string
+	embedRaw      []byte
+	embedVec      []float32
+	embedErr      string
+	rerankResp    []float32
+	delay         time.Duration
 }
 
 func (m *mockTritonServer) ModelStreamInfer(stream grpc.BidiStreamingServer[tritonv2.ModelInferRequest, tritonv2.ModelStreamInferResponse]) error {
@@ -97,7 +99,12 @@ func (m *mockTritonServer) ModelStreamInfer(stream grpc.BidiStreamingServer[trit
 			ModelName:    req.GetModelName(),
 			ModelVersion: req.GetModelVersion(),
 		}
-		if m.embedFP16 {
+		if m.embedDatatype != "" {
+			resp.Outputs = []*tritonv2.ModelInferResponse_InferOutputTensor{
+				{Name: "EMBEDDING", Datatype: m.embedDatatype, Shape: []int64{1, 1}},
+			}
+			resp.RawOutputContents = [][]byte{m.embedRaw}
+		} else if m.embedFP16 {
 			// Encode 1.0 (0x3C00) and 0.5 (0x3800) as FP16 raw bytes.
 			raw := make([]byte, 4)
 			binary.LittleEndian.PutUint16(raw[0:2], 0x3C00)
@@ -195,7 +202,7 @@ func TestHNSWClient_BufconnAndTimeout(t *testing.T) {
 		downstreamv1.RegisterDenseSearchServiceServer(s, &mockDenseServer{candidates: cands})
 	})
 
-	client := dense.NewHNSWClient(pool, 20*time.Millisecond, slog.Default())
+	client := dense.NewHNSWClient(pool, 500*time.Millisecond, slog.Default())
 	got, err := client.SearchDense(context.Background(), "tenant-1", []float32{0.1, 0.2}, 40)
 	if err != nil {
 		t.Fatalf("SearchDense failed: %v", err)
@@ -242,7 +249,7 @@ func TestBM25Client_PartialShardFailureAndDeterministicMerge(t *testing.T) {
 		})
 	})
 
-	client := sparse.NewBM25Client([]*grpcutil.ConnPool{shard1, shard2, shard3}, 20*time.Millisecond, slog.Default())
+	client := sparse.NewBM25Client([]*grpcutil.ConnPool{shard1, shard2, shard3}, 500*time.Millisecond, slog.Default())
 	got, err := client.SearchSparse(context.Background(), "tenant-1", "soc2 rotation", 40)
 	if err != nil {
 		t.Fatalf("expected partial shard failure tolerance, got err: %v", err)
@@ -293,5 +300,29 @@ func TestTritonEmbeddingAndRerankerClients(t *testing.T) {
 	}
 	if len(reranked) != 2 || reranked[0].RerankLogit != 2.5 || reranked[1].RerankLogit != -1.0 {
 		t.Fatalf("unexpected reranked logits: %+v", reranked)
+	}
+
+	// Missing or empty text metadata must return an error instead of falling back to ChunkID.
+	if _, err := rerankClient.Rerank(context.Background(), "encryption rotation", []entity.FusedCandidate{
+		{DocID: 10, ChunkID: "c1"},
+	}); err == nil {
+		t.Fatal("expected error for candidate with missing text metadata")
+	}
+	if _, err := rerankClient.Rerank(context.Background(), "encryption rotation", []entity.FusedCandidate{
+		{DocID: 10, ChunkID: "c1", Metadata: map[string]string{"text": ""}},
+	}); err == nil {
+		t.Fatal("expected error for candidate with empty text metadata")
+	}
+
+	// Unsupported embedding output datatype must return an error instead of decoding as FP32.
+	badTypePool := startBufconnPool(t, func(s *grpc.Server) {
+		tritonv2.RegisterGRPCInferenceServiceServer(s, &mockTritonServer{
+			embedDatatype: "INT32",
+			embedRaw:      []byte{1, 0, 0, 0},
+		})
+	})
+	badTypeClient := triton.NewEmbeddingClient(badTypePool, "bge-m3", 500*time.Millisecond, slog.Default())
+	if _, err := badTypeClient.EmbedQuery(context.Background(), "encryption rotation", "v2"); err == nil {
+		t.Fatal("expected error for unsupported output datatype")
 	}
 }
