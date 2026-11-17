@@ -1,12 +1,14 @@
 package grpcutil
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync/atomic"
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/keepalive"
 )
 
@@ -112,6 +114,33 @@ func (p *ConnPool) Len() int {
 		return 0
 	}
 	return len(p.conns)
+}
+
+// Warmup eagerly initiates connections on all pooled channels and waits until each reaches
+// connectivity.Ready or ctx expires, eliminating cold-dial latency on the first RPC.
+func (p *ConnPool) Warmup(ctx context.Context) error {
+	if p == nil || p.closed.Load() || len(p.conns) == 0 {
+		return ErrPoolClosed
+	}
+	for i, conn := range p.conns {
+		if conn == nil {
+			continue
+		}
+		conn.Connect()
+		for {
+			state := conn.GetState()
+			if state == connectivity.Ready {
+				break
+			}
+			if state == connectivity.Shutdown {
+				return fmt.Errorf("grpcutil: connection %d shut down during warmup", i)
+			}
+			if !conn.WaitForStateChange(ctx, state) {
+				return fmt.Errorf("grpcutil: warmup connection %d: %w", i, ctx.Err())
+			}
+		}
+	}
+	return nil
 }
 
 // Close closes all pooled gRPC connections.
