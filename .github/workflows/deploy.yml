@@ -1,0 +1,98 @@
+name: rag-search-orchestrator Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target deployment environment
+        required: true
+        default: production
+        type: choice
+        options:
+          - production
+          - staging
+      image_tag:
+        description: Container image tag override (defaults to commit SHA)
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ inputs.environment || 'production' }}
+  cancel-in-progress: false
+
+env:
+  RELEASE_NAME: "rag-search-orchestrator"
+  NAMESPACE: "rag-search"
+  SECRET_NAME: "rag-search-orchestrator-redis"
+
+jobs:
+  deploy:
+    name: Deploy with Secret Injection
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment || 'production' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.17.0
+
+      - name: Validate Helm chart
+        run: helm lint deployments/helm
+
+      - name: Validate required CI/CD secrets
+        env:
+          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${KUBE_CONFIG_DATA}" ]; then
+            echo "ERROR: Missing required GitHub Environment secret KUBE_CONFIG_DATA." >&2
+            exit 1
+          fi
+          if [ -z "${REDIS_PASSWORD}" ]; then
+            echo "ERROR: Missing required GitHub Environment secret REDIS_PASSWORD." >&2
+            exit 1
+          fi
+
+      - name: Configure kubeconfig
+        env:
+          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+        run: |
+          set -euo pipefail
+          kubeconfig_path="${RUNNER_TEMP}/kubeconfig"
+          printf '%s' "${KUBE_CONFIG_DATA}" | base64 -d > "${kubeconfig_path}"
+          chmod 600 "${kubeconfig_path}"
+          echo "KUBECONFIG=${kubeconfig_path}" >> "${GITHUB_ENV}"
+
+      - name: Inject Kubernetes Secret and deploy Helm release
+        env:
+          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+          IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
+        run: |
+          set -euo pipefail
+          kubectl create namespace "${NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
+
+          kubectl create secret generic "${SECRET_NAME}" \
+            --namespace "${NAMESPACE}" \
+            --from-literal="REDIS_PASSWORD=${REDIS_PASSWORD}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+          helm upgrade --install "${RELEASE_NAME}" deployments/helm \
+            --namespace "${NAMESPACE}" \
+            --set "image.tag=${IMAGE_TAG}" \
+            --set "redis.existingSecret=${SECRET_NAME}" \
+            --wait \
+            --timeout 5m
+
+      - name: Clean up kubeconfig
+        if: always()
+        run: rm -f "${RUNNER_TEMP}/kubeconfig"
