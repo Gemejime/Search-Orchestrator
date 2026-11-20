@@ -51,11 +51,11 @@ $ClusterInfo = kubectl exec -n $Namespace "$ReleaseName-0" -- `
     env "REDISCLI_AUTH=$RedisPass" redis-cli cluster info
 Write-Host $ClusterInfo
 
-if ($ClusterInfo -notmatch "cluster_state:ok") {
+if (-not ($ClusterInfo -match "cluster_state:ok")) {
     Write-Error "Redis cluster_state is not ok."
     exit 1
 }
-if ($ClusterInfo -notmatch "cluster_slots_assigned:16384") {
+if (-not ($ClusterInfo -match "cluster_slots_assigned:16384")) {
     Write-Error "Not all 16,384 cluster slots are assigned."
     exit 1
 }

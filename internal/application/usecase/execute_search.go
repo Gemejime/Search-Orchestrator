@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"math"
 	"sync"
 	"time"
 
@@ -222,9 +223,9 @@ func (uc *ExecuteSearchUseCase) runCascade(
 				LatencyMs: float64(totalDur.Microseconds()) / 1000.0,
 			},
 			ScoreTrace: dto.ScoreTrace{
-				DenseCount:        int32(denseCount),
-				SparseCount:       int32(sparseCount),
-				RRFCount:          int32(len(rrfResults)),
+				DenseCount:        safeInt32(denseCount),
+				SparseCount:       safeInt32(sparseCount),
+				RRFCount:          safeInt32(len(rrfResults)),
 				ACLPermittedCount: 0,
 				StageTimingsMs:    timings,
 			},
@@ -263,10 +264,10 @@ func (uc *ExecuteSearchUseCase) runCascade(
 			LatencyMs:        float64(totalDur.Microseconds()) / 1000.0,
 		},
 		ScoreTrace: dto.ScoreTrace{
-			DenseCount:            int32(denseCount),
-			SparseCount:           int32(sparseCount),
-			RRFCount:              int32(len(rrfResults)),
-			ACLPermittedCount:     int32(len(permitted)),
+			DenseCount:            safeInt32(denseCount),
+			SparseCount:           safeInt32(sparseCount),
+			RRFCount:              safeInt32(len(rrfResults)),
+			ACLPermittedCount:     safeInt32(len(permitted)),
 			CircuitBreakerTripped: cbTripped,
 			RerankLogits:          rerankLogits,
 			StageTimingsMs:        timings,
@@ -292,10 +293,15 @@ func (uc *ExecuteSearchUseCase) tryTier1Cache(
 	defer uc.deps.CandidatePool.PutFusedCandidates(aclBuf)
 
 	for _, c := range entry.Candidates {
+		var metadata map[string]string
+		if c.Text != "" {
+			metadata = map[string]string{"text": c.Text}
+		}
 		*fusedBuf = append(*fusedBuf, entity.FusedCandidate{
 			DocID:      c.DocID,
 			ChunkID:    c.ChunkID,
 			ParentKey:  c.ParentKey,
+			Metadata:   metadata,
 			FinalScore: c.Score,
 			RRFScore:   c.Score,
 		})
@@ -631,6 +637,7 @@ func (uc *ExecuteSearchUseCase) maybeStoreTier1Cache(
 			DocID:     c.DocID,
 			ChunkID:   c.ChunkID,
 			ParentKey: c.ParentKey,
+			Text:      c.Metadata["text"],
 			Score:     c.RRFScore,
 		}
 	}
@@ -645,6 +652,16 @@ func (uc *ExecuteSearchUseCase) maybeStoreTier1Cache(
 			slog.String("error", err.Error()),
 		)
 	}
+}
+
+func safeInt32(v int) int32 {
+	if v < 0 {
+		return 0
+	}
+	if v > math.MaxInt32 {
+		return math.MaxInt32
+	}
+	return int32(v)
 }
 
 func (uc *ExecuteSearchUseCase) emitAuditSpan(

@@ -17,6 +17,7 @@ type CachedCandidate struct {
 	DocID     uint32
 	ChunkID   string
 	ParentKey string
+	Text      string
 	Score     float64
 }
 

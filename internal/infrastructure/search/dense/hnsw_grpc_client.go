@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"math"
 	"time"
 
 	"github.com/rag-platform/rag-search-orchestrator/internal/domain/entity"
@@ -71,11 +72,18 @@ func (c *HNSWClient) SearchDense(
 		return nil, err
 	}
 
+	boundedTopK := topK
+	if boundedTopK < 0 {
+		boundedTopK = 0
+	} else if boundedTopK > math.MaxInt32 {
+		boundedTopK = math.MaxInt32
+	}
+
 	client := downstreamv1.NewDenseSearchServiceClient(conn)
 	resp, err := client.Search(callCtx, &downstreamv1.DenseSearchServiceSearchRequest{
 		TenantId: tenantID,
 		Vector:   vector,
-		TopK:     int32(topK),
+		TopK:     int32(boundedTopK),
 	})
 	if err != nil {
 		c.logger.WarnContext(ctx, "hnsw dense search rpc failed",

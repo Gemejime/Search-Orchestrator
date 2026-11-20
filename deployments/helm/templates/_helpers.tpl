@@ -40,6 +40,11 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 metadata:
   annotations:
     checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    {{- if not .Values.redis.existingSecret }}
+    checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+    {{- else }}
+    secret.reloader.stakater.com/reload: {{ include "rag-search-orchestrator.redisSecretName" . | quote }}
+    {{- end }}
   labels:
     {{- include "rag-search-orchestrator.selectorLabels" . | nindent 4 }}
 spec:
@@ -70,12 +75,14 @@ spec:
         capabilities:
           drop:
             - ALL
+      {{- $httpPort := regexFind "[0-9]+$" (default ":8080" .Values.env.HTTP_ADDR) | default "8080" | int }}
+      {{- $grpcPort := regexFind "[0-9]+$" (default ":50051" .Values.env.GRPC_ADDR) | default "50051" | int }}
       ports:
         - name: http
-          containerPort: {{ .Values.service.httpPort }}
+          containerPort: {{ $httpPort }}
           protocol: TCP
         - name: grpc
-          containerPort: {{ .Values.service.grpcPort }}
+          containerPort: {{ $grpcPort }}
           protocol: TCP
       envFrom:
         - configMapRef:

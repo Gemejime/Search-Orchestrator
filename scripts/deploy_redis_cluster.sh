@@ -44,8 +44,13 @@ kubectl wait --for=condition=Ready pod \
   --timeout=300s
 
 echo "Verifying Redis Cluster slot health (16,384 slots)..."
+REDIS_POD=$(kubectl get pods -n "$NAMESPACE" -l "app.kubernetes.io/instance=${RELEASE_NAME}" -o jsonpath='{.items[0].metadata.name}')
+if [ -z "$REDIS_POD" ]; then
+  echo "ERROR: No Redis Cluster pod found for release '$RELEASE_NAME' in namespace '$NAMESPACE'." >&2
+  exit 1
+fi
 REDIS_PASS=$(kubectl get secret "$SECRET_NAME" -n "$NAMESPACE" -o jsonpath='{.data.REDIS_PASSWORD}' | base64 -d)
-CLUSTER_INFO=$(kubectl exec -n "$NAMESPACE" "${RELEASE_NAME}-0" -- \
+CLUSTER_INFO=$(kubectl exec -n "$NAMESPACE" "$REDIS_POD" -- \
   env REDISCLI_AUTH="$REDIS_PASS" redis-cli cluster info)
 echo "$CLUSTER_INFO"
 

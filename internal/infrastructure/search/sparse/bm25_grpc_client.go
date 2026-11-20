@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"math"
 	"sort"
 	"sync"
 	"time"
@@ -93,11 +94,17 @@ func (c *BM25Client) SearchSparse(
 				shardErrs[idx] = err
 				return
 			}
+			boundedTopK := topK
+			if boundedTopK < 0 {
+				boundedTopK = 0
+			} else if boundedTopK > math.MaxInt32 {
+				boundedTopK = math.MaxInt32
+			}
 			client := downstreamv1.NewSparseSearchServiceClient(conn)
 			resp, err := client.Search(callCtx, &downstreamv1.SparseSearchServiceSearchRequest{
 				TenantId:  tenantID,
 				QueryText: queryText,
-				TopK:      int32(topK),
+				TopK:      int32(boundedTopK),
 			})
 			if err != nil {
 				shardErrs[idx] = err

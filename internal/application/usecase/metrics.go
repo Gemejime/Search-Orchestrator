@@ -23,7 +23,14 @@ type MetricsObserver interface {
 
 type noopMetricsObserver struct{}
 
+// ObserveStageLatency is a no-op implementation of MetricsObserver.
 func (noopMetricsObserver) ObserveStageLatency(string, time.Duration) {}
-func (noopMetricsObserver) IncStageError(string, string)              {}
-func (noopMetricsObserver) ObserveRoaringEval(time.Duration)          {}
-func (noopMetricsObserver) IncCircuitBreakerTripped()                 {}
+
+// IncStageError is a no-op implementation of MetricsObserver.
+func (noopMetricsObserver) IncStageError(string, string) {}
+
+// ObserveRoaringEval is a no-op implementation of MetricsObserver.
+func (noopMetricsObserver) ObserveRoaringEval(time.Duration) {}
+
+// IncCircuitBreakerTripped is a no-op implementation of MetricsObserver.
+func (noopMetricsObserver) IncCircuitBreakerTripped() {}

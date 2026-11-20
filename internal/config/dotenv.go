@@ -28,7 +28,7 @@ func LoadDotEnv(path string) error {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil
 		}
-		return fmt.Errorf("open env file %q: %w", cleanPath, err)
+		return fmt.Errorf("open env file: %s", classifyOpenError(err))
 	}
 	defer func() { _ = f.Close() }()
 
@@ -49,25 +49,37 @@ func LoadDotEnv(path string) error {
 
 		eqIdx := strings.IndexByte(line, '=')
 		if eqIdx <= 0 {
-			return fmt.Errorf("parse env file %q line %d: missing '='", cleanPath, lineNum)
+			return fmt.Errorf("parse env file line %d: missing '='", lineNum)
 		}
 
 		key := strings.TrimSpace(line[:eqIdx])
 		if key == "" {
-			return fmt.Errorf("parse env file %q line %d: empty key", cleanPath, lineNum)
+			return fmt.Errorf("parse env file line %d: empty key", lineNum)
 		}
 
 		val := parseEnvValue(strings.TrimSpace(line[eqIdx+1:]))
 		if _, exists := os.LookupEnv(key); !exists {
 			if setErr := os.Setenv(key, val); setErr != nil {
-				return fmt.Errorf("set env %q: %w", key, setErr)
+				return fmt.Errorf("set env %q: invalid value", key)
 			}
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("scan env file %q: %w", cleanPath, err)
+		if errors.Is(err, bufio.ErrTooLong) {
+			return errors.New("scan env file: line too long")
+		}
+		return errors.New("scan env file: read error")
 	}
 	return nil
+}
+
+func classifyOpenError(err error) string {
+	switch {
+	case errors.Is(err, os.ErrPermission):
+		return "permission denied"
+	default:
+		return "open failed"
+	}
 }
 
 // ApplyRuntimeEnv applies Go runtime tuning variables (GOMEMLIMIT, GOGC) when
@@ -88,18 +100,17 @@ func ApplyRuntimeEnv() {
 }
 
 func parseEnvValue(raw string) string {
-	if len(raw) >= 2 {
+	if len(raw) >= 2 && (raw[0] == '"' || raw[0] == '\'') {
 		quote := raw[0]
-		if (quote == '"' || quote == '\'') && raw[len(raw)-1] == quote {
-			inner := raw[1 : len(raw)-1]
-			if quote == '"' {
-				inner = strings.ReplaceAll(inner, `\"`, `"`)
-				inner = strings.ReplaceAll(inner, `\n`, "\n")
-				inner = strings.ReplaceAll(inner, `\r`, "\r")
-				inner = strings.ReplaceAll(inner, `\t`, "\t")
-				inner = strings.ReplaceAll(inner, `\\`, `\`)
+		if endIdx, ok := findClosingQuote(raw, quote); ok {
+			rest := strings.TrimSpace(raw[endIdx+1:])
+			if rest == "" || strings.HasPrefix(rest, "#") {
+				inner := raw[1:endIdx]
+				if quote == '"' {
+					return unescapeDoubleQuoted(inner)
+				}
+				return inner
 			}
-			return inner
 		}
 	}
 
@@ -107,6 +118,57 @@ func parseEnvValue(raw string) string {
 		raw = raw[:idx]
 	}
 	return strings.TrimSpace(raw)
+}
+
+func findClosingQuote(raw string, quote byte) (int, bool) {
+	escaped := false
+	for i := 1; i < len(raw); i++ {
+		if quote == '"' && escaped {
+			escaped = false
+			continue
+		}
+		if quote == '"' && raw[i] == '\\' {
+			escaped = true
+			continue
+		}
+		if raw[i] == quote {
+			return i, true
+		}
+	}
+	return 0, false
+}
+
+func unescapeDoubleQuoted(inner string) string {
+	var b strings.Builder
+	b.Grow(len(inner))
+	for i := 0; i < len(inner); i++ {
+		if inner[i] == '\\' && i+1 < len(inner) {
+			switch inner[i+1] {
+			case '"':
+				b.WriteByte('"')
+				i++
+				continue
+			case 'n':
+				b.WriteByte('\n')
+				i++
+				continue
+			case 'r':
+				b.WriteByte('\r')
+				i++
+				continue
+			case 't':
+				b.WriteByte('\t')
+				i++
+				continue
+			case '\\':
+				b.WriteByte('\\')
+				i++
+				continue
+			}
+		}
+		b.WriteByte(inner[i])
+	}
+	return b.String()
 }
 
 func parseByteSize(raw string) (int64, bool) {

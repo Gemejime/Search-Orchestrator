@@ -306,16 +306,10 @@ func inspectSlogArgs(fset *token.FileSet, path string, args []ast.Expr, typeInfo
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 
-		// Handle slog.<AttrConstructor>(key, val) and slog.Group(name, attrs...).
+		// Handle slog.<AttrConstructor>(key, val), slog.Group(name, attrs...), and slog.GroupValue(attrs...).
 		if attrCall, ok := arg.(*ast.CallExpr); ok && isSlogAttrCall(attrCall, typeInfo, fileImports) {
-			sel := attrCall.Fun.(*ast.SelectorExpr)
-			if sel.Sel.Name == "Group" && len(attrCall.Args) > 1 {
-				findings = append(findings, inspectSlogArgs(fset, path, attrCall.Args[1:], typeInfo, fileImports)...)
-				continue
-			}
-			if len(attrCall.Args) >= 2 {
-				findings = append(findings, checkKeyValuePair(fset, path, attrCall.Args[0], attrCall.Args[1])...)
-				findings = append(findings, inspectExprForSensitiveFields(fset, path, attrCall.Args[1], typeInfo, fileImports)...)
+			if attrFindings, handled := inspectSlogAttrCall(fset, path, attrCall, typeInfo, fileImports); handled {
+				findings = append(findings, attrFindings...)
 				continue
 			}
 		}
@@ -338,6 +332,39 @@ func inspectSlogArgs(fset *token.FileSet, path string, args []ast.Expr, typeInfo
 		findings = append(findings, inspectExprForSensitiveNodes(fset, path, arg)...)
 	}
 	return findings
+}
+
+func isSlogKVConstructor(name string) bool {
+	switch name {
+	case "String", "Int", "Int64", "Uint64", "Float64", "Bool", "Time", "Duration", "Any":
+		return true
+	default:
+		return false
+	}
+}
+
+func inspectSlogAttrCall(fset *token.FileSet, path string, call *ast.CallExpr, typeInfo *types.Info, fileImports map[string]string) ([]Finding, bool) {
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok {
+		return nil, false
+	}
+	switch sel.Sel.Name {
+	case "GroupValue":
+		return inspectSlogArgs(fset, path, call.Args, typeInfo, fileImports), true
+	case "Group", "GroupAttrs":
+		if len(call.Args) > 1 {
+			return inspectSlogArgs(fset, path, call.Args[1:], typeInfo, fileImports), true
+		}
+		return nil, true
+	default:
+		if isSlogKVConstructor(sel.Sel.Name) && len(call.Args) >= 2 {
+			var findings []Finding
+			findings = append(findings, checkKeyValuePair(fset, path, call.Args[0], call.Args[1])...)
+			findings = append(findings, inspectExprForSensitiveFields(fset, path, call.Args[1], typeInfo, fileImports)...)
+			return findings, true
+		}
+		return nil, false
+	}
 }
 
 func isSlogAttrCall(call *ast.CallExpr, typeInfo *types.Info, fileImports map[string]string) bool {
@@ -404,14 +431,8 @@ func inspectExprForSensitiveFields(fset *token.FileSet, path string, expr ast.Ex
 				return false
 			}
 			if isSlogAttrCall(call, typeInfo, fileImports) {
-				sel := call.Fun.(*ast.SelectorExpr)
-				if sel.Sel.Name == "Group" && len(call.Args) > 1 {
-					findings = append(findings, inspectSlogArgs(fset, path, call.Args[1:], typeInfo, fileImports)...)
-					return false
-				}
-				if len(call.Args) >= 2 {
-					findings = append(findings, checkKeyValuePair(fset, path, call.Args[0], call.Args[1])...)
-					findings = append(findings, inspectExprForSensitiveFields(fset, path, call.Args[1], typeInfo, fileImports)...)
+				if attrFindings, handled := inspectSlogAttrCall(fset, path, call, typeInfo, fileImports); handled {
+					findings = append(findings, attrFindings...)
 					return false
 				}
 			}

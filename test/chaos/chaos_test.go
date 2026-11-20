@@ -194,17 +194,18 @@ func startChaosPool(t *testing.T, register func(*grpc.Server)) *grpcutil.ConnPoo
 		t.Fatalf("NewConnPoolFromConns: %v", err)
 	}
 
+	t.Cleanup(func() {
+		_ = cp.Close()
+		srv.Stop()
+		_ = lis.Close()
+	})
+
 	warmCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	if err := cp.Warmup(warmCtx); err != nil {
 		t.Fatalf("bufconn warmup: %v", err)
 	}
 
-	t.Cleanup(func() {
-		_ = cp.Close()
-		srv.Stop()
-		_ = lis.Close()
-	})
 	return cp
 }
 

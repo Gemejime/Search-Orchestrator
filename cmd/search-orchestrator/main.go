@@ -43,7 +43,7 @@ func main() {
 		bootstrapLogger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 			Level: slog.LevelWarn,
 		}))
-		bootstrapLogger.Warn("failed to load .env file", slog.String("error", err.Error()))
+		bootstrapLogger.Warn("failed to load .env file", slog.String("error_class", "dotenv_load_failed"))
 	}
 	config.ApplyRuntimeEnv()
 
@@ -259,8 +259,10 @@ func run(cfg config.Config, logger *slog.Logger) int {
 		select {
 		case <-grpcDone:
 			grpcStopped = true
+			grpcDone = nil
 		case httpErr := <-httpDone:
 			httpStopped = true
+			httpDone = nil
 			if httpErr != nil {
 				logger.Warn("http server shutdown error", slog.String("error", httpErr.Error()))
 			}

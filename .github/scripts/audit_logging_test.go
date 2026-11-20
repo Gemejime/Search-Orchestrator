@@ -226,3 +226,39 @@ func Handle(req Request, token string) {
 		t.Fatalf("expected 3 findings (message-only .Authorization + 2 nested unredacted authorization keys), got %d: %+v", len(findings), findings)
 	}
 }
+
+func TestScanDirs_GroupValueSensitiveSelectorAndRedaction(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	testFile := filepath.Join(tmpDir, "group_value.go")
+	src := `package handler
+
+import "log/slog"
+
+type Request struct {
+	Authorization string
+	Password      string
+}
+
+func Handle(req Request) {
+	slog.Info("nested group value",
+		slog.Any("meta", slog.GroupValue(
+			slog.String("first", req.Authorization),
+			slog.String("authorization", "[REDACTED]"),
+			slog.String("second", req.Password),
+		)),
+	)
+}
+`
+	if err := os.WriteFile(testFile, []byte(src), 0o600); err != nil {
+		t.Fatalf("write testFile: %v", err)
+	}
+
+	findings, err := scanDirs([]string{tmpDir})
+	if err != nil {
+		t.Fatalf("unexpected scan error: %v", err)
+	}
+	if len(findings) != 2 {
+		t.Fatalf("expected 2 findings (Authorization in arg 0 + RedisPassword in arg 2, while redacted authorization is exempted), got %d: %+v", len(findings), findings)
+	}
+}

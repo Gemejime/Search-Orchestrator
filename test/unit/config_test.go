@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime/debug"
+	"strings"
 	"testing"
 	"time"
 
@@ -138,8 +139,43 @@ func TestLoadDotEnvMissingAndMalformed(t *testing.T) {
 	if err := os.WriteFile(badPath, []byte("INVALID_LINE_WITHOUT_EQUALS\n"), 0o600); err != nil {
 		t.Fatalf("write bad .env: %v", err)
 	}
-	if err := config.LoadDotEnv(badPath); err == nil {
+	err := config.LoadDotEnv(badPath)
+	if err == nil {
 		t.Fatal("expected error for malformed .env line, got nil")
+	}
+	if strings.Contains(err.Error(), badPath) {
+		t.Fatalf("expected sanitized dotenv error without file path, got %q", err.Error())
+	}
+}
+
+func TestLoadDotEnvQuotedHashAndTrailingComments(t *testing.T) {
+	clearEnvForTest(t, []string{"DOUBLE_HASH", "SINGLE_HASH", "UNQUOTED_COMMENT", "ESCAPED_BS"})
+
+	envPath := filepath.Join(t.TempDir(), "quotes.env")
+	content := `
+DOUBLE_HASH="value#with#hashes" # trailing comment
+SINGLE_HASH='single#hash' # trailing comment
+UNQUOTED_COMMENT=plain_val # inline comment
+ESCAPED_BS="C:\\new\\test" # windows path
+`
+	if err := os.WriteFile(envPath, []byte(content), 0o600); err != nil {
+		t.Fatalf("write quotes.env: %v", err)
+	}
+	if err := config.LoadDotEnv(envPath); err != nil {
+		t.Fatalf("LoadDotEnv failed: %v", err)
+	}
+
+	if got := os.Getenv("DOUBLE_HASH"); got != "value#with#hashes" {
+		t.Errorf("DOUBLE_HASH = %q, want %q", got, "value#with#hashes")
+	}
+	if got := os.Getenv("SINGLE_HASH"); got != "single#hash" {
+		t.Errorf("SINGLE_HASH = %q, want %q", got, "single#hash")
+	}
+	if got := os.Getenv("UNQUOTED_COMMENT"); got != "plain_val" {
+		t.Errorf("UNQUOTED_COMMENT = %q, want %q", got, "plain_val")
+	}
+	if got := os.Getenv("ESCAPED_BS"); got != `C:\new\test` {
+		t.Errorf("ESCAPED_BS = %q, want %q", got, `C:\new\test`)
 	}
 }
 

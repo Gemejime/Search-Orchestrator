@@ -14,6 +14,12 @@ spec:
     helm:
       valueFiles:
         - values.yaml
+      {{- range .Values.argocd.valueFiles }}
+        - {{ . | quote }}
+      {{- end }}
+      parameters:
+        - name: canary.enabled
+          value: {{ .Values.canary.enabled | quote }}
   destination:
     server: {{ .Values.argocd.destinationServer | quote }}
     namespace: {{ .Values.argocd.destinationNamespace | quote }}

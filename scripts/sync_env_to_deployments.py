@@ -77,18 +77,22 @@ def load_env_file(path: Path) -> dict[str, str]:
     return entries
 
 
+_YAML_UNESCAPE_RE = re.compile(r'\\(["nrt\\])')
+_YAML_UNESCAPE_MAP = {
+    '"': '"',
+    "n": "\n",
+    "r": "\r",
+    "t": "\t",
+    "\\": "\\",
+}
+
+
 def parse_yaml_scalar(raw: str) -> str:
     """Parse a simple YAML scalar value from an env block line."""
     val = raw.strip()
     if len(val) >= 2 and val[0] == '"' and val[-1] == '"':
         inner = val[1:-1]
-        return (
-            inner.replace(r"\"", '"')
-            .replace(r"\n", "\n")
-            .replace(r"\r", "\r")
-            .replace(r"\t", "\t")
-            .replace(r"\\", "\\")
-        )
+        return _YAML_UNESCAPE_RE.sub(lambda m: _YAML_UNESCAPE_MAP[m.group(1)], inner)
     if len(val) >= 2 and val[0] == "'" and val[-1] == "'":
         return val[1:-1].replace("''", "'")
     comment_idx = val.find(" #")

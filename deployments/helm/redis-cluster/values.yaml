@@ -1,10 +1,15 @@
 # Bitnami Redis Cluster (Redis 7.2+) Helm Values for rag-search-orchestrator
 # 6-node clustered topology: 3 primary shards + 3 secondary replicas.
 
+fullnameOverride: "rag-search-orchestrator-redis"
+
 global:
-  redis:
-    existingSecret: "rag-search-orchestrator-redis"
-    existingSecretPasswordKey: "REDIS_PASSWORD"
+  security:
+    # Reviewed pinned bitnamilegacy/* image digests/tags for 11.* chart compatibility.
+    allowInsecureImages: true
+
+existingSecret: "rag-search-orchestrator-redis"
+existingSecretPasswordKey: "REDIS_PASSWORD"
 
 image:
   repository: bitnamilegacy/redis-cluster

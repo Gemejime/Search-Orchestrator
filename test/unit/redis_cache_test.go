@@ -170,8 +170,8 @@ func TestTier1BinaryCodec_RoundTripAndValidation(t *testing.T) {
 	in := repository.Tier1CacheEntry{
 		RerankerFallback: true,
 		Candidates: []repository.CachedCandidate{
-			{DocID: 101, ChunkID: "chk-1", ParentKey: "parent:t1:101:chk-1", Score: 0.9123},
-			{DocID: 202, ChunkID: "chk-2", ParentKey: "parent:t1:202:chk-2", Score: 0.5432},
+			{DocID: 101, ChunkID: "chk-1", ParentKey: "parent:t1:101:chk-1", Text: "passage one", Score: 0.9123},
+			{DocID: 202, ChunkID: "chk-2", ParentKey: "parent:t1:202:chk-2", Text: "passage two", Score: 0.5432},
 		},
 	}
 

@@ -3,6 +3,7 @@ package unit
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"testing"
 	"time"
@@ -470,6 +471,98 @@ func TestExecuteSearch_Tier1CacheHitAppliesRerankAndTau(t *testing.T) {
 	}
 	if len(resp.Chunks) != 2 || resp.Chunks[0].DocID != 3 || resp.Chunks[1].DocID != 2 {
 		t.Fatalf("expected reranked order [3, 2], got %+v", resp.Chunks)
+	}
+}
+
+type textCheckingReranker struct {
+	logits map[uint32]float64
+}
+
+func (r *textCheckingReranker) Rerank(_ context.Context, _ string, candidates []entity.FusedCandidate) ([]entity.FusedCandidate, error) {
+	out := make([]entity.FusedCandidate, len(candidates))
+	copy(out, candidates)
+	for i := range out {
+		if out[i].Metadata["text"] == "" {
+			return nil, fmt.Errorf("candidate %s missing text metadata", out[i].ChunkID)
+		}
+		if l, ok := r.logits[out[i].DocID]; ok {
+			out[i].RerankLogit = l
+		}
+	}
+	return out, nil
+}
+
+func TestExecuteSearch_ColdThenTier1CacheHitPreservesTextForReranking(t *testing.T) {
+	t.Parallel()
+
+	// Cold request returns 5 candidates (MaxTopK) so Tier 1 cache is populated.
+	// RRF ranks DocID 1 > DocID 2 > DocID 3 > DocID 4 > DocID 5.
+	// Reranker requires Metadata["text"] and ranks DocID 5 > DocID 4 > ...
+	denseCands := make([]entity.SearchCandidate, 5)
+	for i := 0; i < 5; i++ {
+		id := uint32(i + 1)
+		denseCands[i] = entity.SearchCandidate{
+			DocID:     id,
+			ChunkID:   fmt.Sprintf("c%d", id),
+			ParentKey: fmt.Sprintf("p%d", id),
+			Score:     float64(10 - i),
+			Metadata:  map[string]string{"text": fmt.Sprintf("passage-%d", id)},
+		}
+	}
+
+	cache := &stubQueryCache{}
+	reranker := &textCheckingReranker{
+		logits: map[uint32]float64{1: 1.0, 2: 2.0, 3: 3.0, 4: 4.0, 5: 5.0},
+	}
+
+	uc := usecase.NewExecuteSearchUseCase(
+		usecase.SearchConfig{RerankTau: 0.5},
+		usecase.SearchDeps{
+			Embedder:     &stubEmbedder{vec: []float32{0.1, 0.2}},
+			DenseSearch:  &stubDense{res: denseCands},
+			SparseSearch: &stubSparse{},
+			Reranker:     reranker,
+			ParentChunks: &stubParentChunks{},
+			QueryCache:   cache,
+		},
+	)
+
+	req := dto.SearchRequest{
+		RequestID:             "r-cold",
+		TenantID:              "t1",
+		QueryText:             "cold then cached rerank",
+		EmbeddingModelVersion: "v1",
+		CallerACLBitmap:       makeRoaringBytes(t, 1, 2, 3, 4, 5),
+		TopK:                  2,
+	}
+
+	coldResp, err := uc.Execute(context.Background(), req)
+	if err != nil {
+		t.Fatalf("cold Execute failed: %v", err)
+	}
+	if coldResp.CacheHit {
+		t.Fatal("expected cold CacheHit=false")
+	}
+	if coldResp.RerankerFallback {
+		t.Fatal("expected cold RerankerFallback=false")
+	}
+	if len(coldResp.Chunks) != 2 || coldResp.Chunks[0].DocID != 5 || coldResp.Chunks[1].DocID != 4 {
+		t.Fatalf("expected cold reranked winners [5, 4], got %+v", coldResp.Chunks)
+	}
+
+	req.RequestID = "r-hit"
+	hitResp, err := uc.Execute(context.Background(), req)
+	if err != nil {
+		t.Fatalf("cache-hit Execute failed: %v", err)
+	}
+	if !hitResp.CacheHit {
+		t.Fatal("expected hit CacheHit=true")
+	}
+	if hitResp.RerankerFallback {
+		t.Fatal("expected hit RerankerFallback=false")
+	}
+	if len(hitResp.Chunks) != 2 || hitResp.Chunks[0].DocID != 5 || hitResp.Chunks[1].DocID != 4 {
+		t.Fatalf("expected cache-hit reranked winners [5, 4], got %+v", hitResp.Chunks)
 	}
 }
 

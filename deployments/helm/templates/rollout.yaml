@@ -6,7 +6,9 @@ metadata:
   labels:
     {{- include "rag-search-orchestrator.labels" . | nindent 4 }}
 spec:
+  {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
+  {{- end }}
   revisionHistoryLimit: 5
   selector:
     matchLabels:
@@ -18,6 +20,10 @@ spec:
       analysis:
         templates:
           - templateName: {{ include "rag-search-orchestrator.fullname" . }}-slo-gate
+        args:
+          - name: canary-hash
+            valueFrom:
+              podTemplateHashValue: Latest
         startingStep: 1
       steps:
         - setWeight: 10

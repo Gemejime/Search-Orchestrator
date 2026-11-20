@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"math"
 	"runtime"
 	"sync/atomic"
 	"time"
@@ -126,8 +127,7 @@ func (e *RingBufferEmitter) Emit(span repository.SearchAuditSpan) {
 		pos := e.head.Load()
 		slot := &e.slots[pos&e.mask]
 		seq := slot.seq.Load()
-		dif := int64(seq) - int64(pos)
-		if dif == 0 {
+		if seq == pos {
 			if e.head.CompareAndSwap(pos, pos+1) {
 				slot.span = span
 				slot.seq.Store(pos + 1)
@@ -137,7 +137,7 @@ func (e *RingBufferEmitter) Emit(span repository.SearchAuditSpan) {
 				}
 				return
 			}
-		} else if dif < 0 {
+		} else if seq-pos > math.MaxInt64 {
 			e.dropped.Add(1)
 			return
 		} else {
@@ -206,8 +206,7 @@ func (e *RingBufferEmitter) drainAvailable() bool {
 	for {
 		slot := &e.slots[e.tail&e.mask]
 		seq := slot.seq.Load()
-		dif := int64(seq) - int64(e.tail+1)
-		if dif != 0 {
+		if seq != e.tail+1 {
 			return processed
 		}
 

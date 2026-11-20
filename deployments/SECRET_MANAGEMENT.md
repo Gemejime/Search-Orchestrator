@@ -58,8 +58,12 @@ If your cluster uses **External Secrets Operator (ESO)**, **HashiCorp Vault**, o
 ## 6. Secret Rotation & Logging Hygiene
 
 - **Rotating `REDIS_PASSWORD`**:
-  1. Update `REDIS_PASSWORD` in the GitHub Environment (or External Secret Store).
-  2. Re-run the `Deploy` workflow (or update the Secret and trigger `kubectl rollout restart deployment/rag-search-orchestrator -n rag-search`).
+  1. **Coordinated server-side password update**: On every Redis Cluster node (primaries and replicas), update the active authentication, replication credentials, and persisted configuration in lockstep so replication links do not break:
+     - `CONFIG SET requirepass "<NEW_REDIS_PASSWORD>"`
+     - `CONFIG SET masterauth "<NEW_REDIS_PASSWORD>"`
+     - `CONFIG REWRITE` (or update the persistent Redis Secret/ConfigMap and perform a rolling restart if `CONFIG REWRITE` is disabled on immutable volumes).
+  2. **Update client Secret**: Update `REDIS_PASSWORD` in the GitHub Environment (or External Secret Store) and re-run the `Deploy` workflow (or apply the updated `rag-search-orchestrator-redis` Secret and run `kubectl rollout restart deployment/rag-search-orchestrator -n rag-search`, or `kubectl argo rollouts restart` when canary Rollouts are enabled).
+  3. **Verify authentication & cluster health**: Before considering rotation complete, verify `redis-cli` authentication with the new password, confirm `cluster_state:ok` and `cluster_slots_assigned:16384` via `redis-cli cluster info`, and verify `rag-search-orchestrator` `/ready` checks pass.
 - **Logging Invariants**:
   - Per `.ai/security.md`, `REDIS_PASSWORD`, `Authorization` headers, bearer tokens, and raw `caller_acl_bitmap` bytes must never be logged.
   - `internal/config/config.go` marks `RedisPassword` with `#nosec G117` and never passes it to `slog`.
