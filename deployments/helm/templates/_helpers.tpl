@@ -38,6 +38,8 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 
 {{- define "rag-search-orchestrator.podTemplateSpec" -}}
 metadata:
+  annotations:
+    checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
   labels:
     {{- include "rag-search-orchestrator.selectorLabels" . | nindent 4 }}
 spec:
@@ -75,48 +77,15 @@ spec:
         - name: grpc
           containerPort: {{ .Values.service.grpcPort }}
           protocol: TCP
+      envFrom:
+        - configMapRef:
+            name: {{ include "rag-search-orchestrator.fullname" . }}-config
       env:
-        - name: GOMEMLIMIT
-          value: {{ .Values.env.GOMEMLIMIT | quote }}
-        - name: GOGC
-          value: {{ .Values.env.GOGC | quote }}
-        - name: HTTP_ADDR
-          value: {{ .Values.env.HTTP_ADDR | quote }}
-        - name: GRPC_ADDR
-          value: {{ .Values.env.GRPC_ADDR | quote }}
-        - name: REDIS_ADDRS
-          value: {{ .Values.env.REDIS_ADDRS | quote }}
         - name: REDIS_PASSWORD
           valueFrom:
             secretKeyRef:
               name: {{ include "rag-search-orchestrator.redisSecretName" . }}
               key: {{ .Values.redis.secretKey | quote }}
-        - name: HNSW_TARGETS
-          value: {{ .Values.env.HNSW_TARGETS | quote }}
-        - name: BM25_TARGETS
-          value: {{ .Values.env.BM25_TARGETS | quote }}
-        - name: TRITON_EMBED_TARGETS
-          value: {{ .Values.env.TRITON_EMBED_TARGETS | quote }}
-        - name: TRITON_RERANK_TARGETS
-          value: {{ .Values.env.TRITON_RERANK_TARGETS | quote }}
-        - name: TRITON_EMBED_MODEL
-          value: {{ .Values.env.TRITON_EMBED_MODEL | quote }}
-        - name: TRITON_RERANK_MODEL
-          value: {{ .Values.env.TRITON_RERANK_MODEL | quote }}
-        - name: TRITON_RERANK_VERSION
-          value: {{ .Values.env.TRITON_RERANK_VERSION | quote }}
-        - name: RERANK_TAU
-          value: {{ .Values.env.RERANK_TAU | quote }}
-        - name: CACHE_TTL
-          value: {{ .Values.env.CACHE_TTL | quote }}
-        - name: RING_BUFFER_CAPACITY
-          value: {{ .Values.env.RING_BUFFER_CAPACITY | quote }}
-        - name: GRPC_POOL_SIZE
-          value: {{ .Values.env.GRPC_POOL_SIZE | quote }}
-        - name: SHUTDOWN_DRAIN_DELAY
-          value: {{ .Values.env.SHUTDOWN_DRAIN_DELAY | quote }}
-        - name: LOG_LEVEL
-          value: {{ .Values.env.LOG_LEVEL | quote }}
       livenessProbe:
         httpGet:
           path: /healthz
