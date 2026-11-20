@@ -7,6 +7,9 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"github.com/rag-platform/rag-search-orchestrator/internal/application/dto"
 	"github.com/rag-platform/rag-search-orchestrator/internal/domain/acl"
 	"github.com/rag-platform/rag-search-orchestrator/internal/domain/entity"
@@ -695,6 +698,15 @@ func classifyError(err error) string {
 	}
 	if errors.Is(err, context.Canceled) {
 		return "Canceled"
+	}
+	var grpcStatus interface{ GRPCStatus() *status.Status }
+	if errors.As(err, &grpcStatus) {
+		switch grpcStatus.GRPCStatus().Code() {
+		case codes.DeadlineExceeded:
+			return "DeadlineExceeded"
+		case codes.Canceled:
+			return "Canceled"
+		}
 	}
 	return "Internal"
 }

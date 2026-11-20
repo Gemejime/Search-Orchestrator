@@ -1,4 +1,4 @@
-.PHONY: fmt vet lint test bench proto vuln sec audit-logging check
+.PHONY: fmt vet lint test bench bench-perf test-chaos proto vuln sec audit-logging check
 
 SRC_DIRS := $(wildcard cmd internal pkg)
 
@@ -16,6 +16,12 @@ test:
 
 bench:
 	go test -run=^$$ -bench=. -benchmem ./test/unit/...
+
+bench-perf:
+	go test -tags=performance -v -bench=. -benchmem ./test/performance/...
+
+test-chaos:
+	go test -tags=chaos -v -race ./test/chaos/...
 
 proto:
 	buf lint
