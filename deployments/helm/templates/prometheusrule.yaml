@@ -1,0 +1,50 @@
+{{- if .Values.monitoring.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "rag-search-orchestrator.fullname" . }}
+  labels:
+    {{- include "rag-search-orchestrator.labels" . | nindent 4 }}
+spec:
+  groups:
+    - name: rag-search-orchestrator.rules
+      rules:
+        - alert: SearchOrchestratorP99LatencyViolation
+          expr: histogram_quantile(0.99, sum(rate(search_orchestrator_latency_seconds_bucket[5m])) by (le)) > 0.075
+          for: 3m
+          labels:
+            severity: page
+            service: rag-search-orchestrator
+          annotations:
+            summary: "rag-search-orchestrator P99 latency exceeded 75ms SLO"
+            description: "End-to-end retrieval P99 latency is above 75ms for more than 3 minutes."
+        - alert: TritonRerankerSaturation
+          expr: rate(search_circuit_breaker_tripped_total[2m]) > 5
+          for: 1m
+          labels:
+            severity: warning
+            service: rag-search-orchestrator
+          annotations:
+            summary: "Triton Cross-Encoder circuit breaker tripping"
+            description: "Triton reranker circuit breaker trip rate exceeded 5/s for over 1 minute."
+        - alert: SearchShardDeadlineExceeded
+          expr: sum(rate(search_fanout_stage_errors_total{error="DeadlineExceeded"}[5m])) / clamp_min(sum(rate(search_orchestrator_requests_total[5m])), 1) > 0.01
+          for: 2m
+          labels:
+            severity: warning
+            service: rag-search-orchestrator
+          annotations:
+            summary: "Search fan-out 20ms deadline exceeded rate > 1%"
+            description: "HNSW dense or BM25 sparse fan-out DeadlineExceeded ratio exceeded 1%."
+        {{- if .Values.monitoring.bitmapSyncAlert.enabled }}
+        - alert: CacheInvalidationCoherenceLag
+          expr: time() - search_last_bitmap_sync_timestamp_seconds > 5
+          for: 2m
+          labels:
+            severity: warning
+            service: rag-search-orchestrator
+          annotations:
+            summary: "Entitlement bitmap sync lag exceeded 5s"
+            description: "Local Pub/Sub bitmap cache has not synchronized for over 5 seconds."
+        {{- end }}
+{{- end }}

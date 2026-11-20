@@ -1,0 +1,32 @@
+{{- if .Values.canary.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: {{ include "rag-search-orchestrator.fullname" . }}-slo-gate
+  labels:
+    {{- include "rag-search-orchestrator.labels" . | nindent 4 }}
+spec:
+  metrics:
+    - name: search-error-rate
+      interval: 1m
+      count: 5
+      failureLimit: 1
+      successCondition: len(result) == 0 || result[0] <= 0.0001
+      provider:
+        prometheus:
+          address: {{ .Values.canary.analysis.prometheusAddress | quote }}
+          query: |
+            sum(rate(search_orchestrator_requests_total{status_code=~"5..|Internal|DeadlineExceeded"}[2m]))
+            /
+            clamp_min(sum(rate(search_orchestrator_requests_total[2m])), 1)
+    - name: search-p99-latency-seconds
+      interval: 1m
+      count: 5
+      failureLimit: 1
+      successCondition: len(result) == 0 || result[0] <= 0.075
+      provider:
+        prometheus:
+          address: {{ .Values.canary.analysis.prometheusAddress | quote }}
+          query: |
+            histogram_quantile(0.99, sum(rate(search_orchestrator_latency_seconds_bucket[2m])) by (le))
+{{- end }}

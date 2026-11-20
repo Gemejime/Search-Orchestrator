@@ -1,0 +1,73 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "rag-search-orchestrator.fullname" . }}
+  labels:
+    {{- include "rag-search-orchestrator.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "rag-search-orchestrator.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              {{- toYaml .Values.networkPolicy.edgeGatewayNamespaceSelector | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.httpPort }}
+        - protocol: TCP
+          port: {{ .Values.service.grpcPort }}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              {{- toYaml .Values.networkPolicy.prometheusNamespaceSelector | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.httpPort }}
+  egress:
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.egress.redisNamespace }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.egress.redisPort }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.egress.searchNamespace }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.egress.hnswPort }}
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.egress.bm25Port }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.egress.tritonNamespace }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.egress.tritonPort }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.egress.telemetryNamespace }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.egress.telemetryPort }}
+{{- end }}

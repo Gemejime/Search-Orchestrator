@@ -1,0 +1,30 @@
+{{- if .Values.canary.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: {{ include "rag-search-orchestrator.fullname" . }}
+  labels:
+    {{- include "rag-search-orchestrator.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      {{- include "rag-search-orchestrator.selectorLabels" . | nindent 6 }}
+  template:
+    {{- include "rag-search-orchestrator.podTemplateSpec" . | nindent 4 }}
+  strategy:
+    canary:
+      analysis:
+        templates:
+          - templateName: {{ include "rag-search-orchestrator.fullname" . }}-slo-gate
+        startingStep: 1
+      steps:
+        - setWeight: 10
+        - pause:
+            duration: 10m
+        - setWeight: 25
+        - pause:
+            duration: 15m
+        - setWeight: 100
+{{- end }}
