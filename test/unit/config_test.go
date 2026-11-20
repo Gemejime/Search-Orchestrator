@@ -199,6 +199,16 @@ func TestDotEnvExampleIsValidAndComplete(t *testing.T) {
 	}
 }
 
+func TestRedisClusterAddrsFallback(t *testing.T) {
+	clearEnvForTest(t, []string{"REDIS_ADDRS", "REDIS_CLUSTER_ADDRS"})
+	t.Setenv("REDIS_CLUSTER_ADDRS", "redis-0:6379,redis-1:6379")
+
+	cfg := config.Load()
+	if len(cfg.RedisAddrs) != 2 || cfg.RedisAddrs[0] != "redis-0:6379" || cfg.RedisAddrs[1] != "redis-1:6379" {
+		t.Errorf("RedisAddrs = %v, want [redis-0:6379 redis-1:6379]", cfg.RedisAddrs)
+	}
+}
+
 func clearEnvForTest(t *testing.T, keys []string) {
 	t.Helper()
 	for _, k := range keys {

@@ -49,7 +49,7 @@ func Load() Config {
 	return Config{
 		HTTPAddr:            envOrDefault("HTTP_ADDR", DefaultHTTPAddr),
 		GRPCAddr:            envOrDefault("GRPC_ADDR", DefaultGRPCAddr),
-		RedisAddrs:          splitCSV(envOrDefault("REDIS_ADDRS", "localhost:6379")),
+		RedisAddrs:          splitCSV(envOrDefault("REDIS_ADDRS", envOrDefault("REDIS_CLUSTER_ADDRS", "localhost:6379"))),
 		RedisPassword:       os.Getenv("REDIS_PASSWORD"),
 		HNSWTargets:         splitCSV(envOrDefault("HNSW_TARGETS", "localhost:50052")),
 		BM25Targets:         splitCSV(envOrDefault("BM25_TARGETS", "localhost:50053")),

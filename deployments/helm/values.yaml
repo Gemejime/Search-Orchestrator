@@ -28,7 +28,7 @@ env:
   GRPC_ADDR: ":50051"
   SHUTDOWN_DRAIN_DELAY: "5s"
   LOG_LEVEL: "info"
-  REDIS_ADDRS: "localhost:6379"
+  REDIS_ADDRS: "rag-search-orchestrator-redis-0.rag-search-orchestrator-redis-headless.rag-search.svc.cluster.local:6379,rag-search-orchestrator-redis-1.rag-search-orchestrator-redis-headless.rag-search.svc.cluster.local:6379,rag-search-orchestrator-redis-2.rag-search-orchestrator-redis-headless.rag-search.svc.cluster.local:6379"
   CACHE_TTL: "5m"
   HNSW_TARGETS: "localhost:50052"
   BM25_TARGETS: "localhost:50053"
@@ -78,7 +78,7 @@ networkPolicy:
   prometheusNamespaceSelector:
     kubernetes.io/metadata.name: monitoring
   egress:
-    redisNamespace: rag-data
+    redisNamespace: rag-search
     redisPort: 6379
     searchNamespace: rag-search
     hnswPort: 50052
