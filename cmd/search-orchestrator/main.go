@@ -8,8 +8,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
-	"strings"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -21,6 +19,7 @@ import (
 
 	searchv1 "github.com/rag-platform/rag-search-orchestrator/api/proto/v1"
 	"github.com/rag-platform/rag-search-orchestrator/internal/application/usecase"
+	"github.com/rag-platform/rag-search-orchestrator/internal/config"
 	"github.com/rag-platform/rag-search-orchestrator/internal/domain/acl"
 	rediscache "github.com/rag-platform/rag-search-orchestrator/internal/infrastructure/cache/redis"
 	"github.com/rag-platform/rag-search-orchestrator/internal/infrastructure/grpcutil"
@@ -35,57 +34,20 @@ import (
 )
 
 const (
-	defaultHTTPAddr           = ":8080"
-	defaultGRPCAddr           = ":50051"
-	defaultWarmupTimeout      = 5 * time.Second
-	defaultShutdownTimeout    = 15 * time.Second
-	defaultShutdownDrainDelay = 5 * time.Second
+	defaultWarmupTimeout   = 5 * time.Second
+	defaultShutdownTimeout = 15 * time.Second
 )
 
-type serviceConfig struct {
-	HTTPAddr           string
-	GRPCAddr           string
-	RedisAddrs         []string
-	RedisPassword      string // #nosec G117 -- read from environment, never logged
-	HNSWTargets        []string
-	BM25Targets        []string
-	TritonEmbedTargets []string
-	TritonRerankTarget []string
-	TritonEmbedModel   string
-	TritonRerankModel  string
-	TritonRerankVer    string
-	RerankTau          float64
-	CacheTTL           time.Duration
-	RingBufferCapacity int
-	ShutdownDrainDelay time.Duration
-	GRPCPoolSize       int
-	LogLevel           slog.Level
-}
-
-func loadConfig() serviceConfig {
-	return serviceConfig{
-		HTTPAddr:           envOrDefault("HTTP_ADDR", defaultHTTPAddr),
-		GRPCAddr:           envOrDefault("GRPC_ADDR", defaultGRPCAddr),
-		RedisAddrs:         splitCSV(envOrDefault("REDIS_ADDRS", "localhost:6379")),
-		RedisPassword:      os.Getenv("REDIS_PASSWORD"),
-		HNSWTargets:        splitCSV(envOrDefault("HNSW_TARGETS", "localhost:50052")),
-		BM25Targets:        splitCSV(envOrDefault("BM25_TARGETS", "localhost:50053")),
-		TritonEmbedTargets: splitCSV(envOrDefault("TRITON_EMBED_TARGETS", "localhost:8001")),
-		TritonRerankTarget: splitCSV(envOrDefault("TRITON_RERANK_TARGETS", "localhost:8001")),
-		TritonEmbedModel:   envOrDefault("TRITON_EMBED_MODEL", triton.DefaultEmbedModelName),
-		TritonRerankModel:  envOrDefault("TRITON_RERANK_MODEL", triton.DefaultRerankModelName),
-		TritonRerankVer:    os.Getenv("TRITON_RERANK_VERSION"),
-		RerankTau:          envFloat("RERANK_TAU", 0.0),
-		CacheTTL:           envDuration("CACHE_TTL", rediscache.DefaultQueryCacheTTL),
-		RingBufferCapacity: envInt("RING_BUFFER_CAPACITY", telemetry.DefaultRingBufferCapacity),
-		ShutdownDrainDelay: envDuration("SHUTDOWN_DRAIN_DELAY", defaultShutdownDrainDelay),
-		GRPCPoolSize:       envInt("GRPC_POOL_SIZE", grpcutil.DefaultPoolSize),
-		LogLevel:           parseLogLevel(envOrDefault("LOG_LEVEL", "info")),
-	}
-}
-
 func main() {
-	cfg := loadConfig()
+	if err := config.LoadDotEnv(os.Getenv("ENV_FILE")); err != nil {
+		bootstrapLogger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+			Level: slog.LevelWarn,
+		}))
+		bootstrapLogger.Warn("failed to load .env file", slog.String("error", err.Error()))
+	}
+	config.ApplyRuntimeEnv()
+
+	cfg := config.Load()
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: cfg.LogLevel,
 	}))
@@ -94,7 +56,7 @@ func main() {
 	os.Exit(run(cfg, logger))
 }
 
-func run(cfg serviceConfig, logger *slog.Logger) int {
+func run(cfg config.Config, logger *slog.Logger) int {
 	metrics := telemetry.NewPrometheusMetrics()
 	auditSink := telemetry.LogAuditSink{Logger: logger}
 	ringEmitter := telemetry.NewRingBufferEmitter(cfg.RingBufferCapacity, auditSink, logger)
@@ -155,7 +117,7 @@ func run(cfg serviceConfig, logger *slog.Logger) int {
 	defer func() { _ = embedPool.Close() }()
 
 	rerankPool, err := grpcutil.NewConnPool(grpcutil.Config{
-		Targets:     cfg.TritonRerankTarget,
+		Targets:     cfg.TritonRerankTargets,
 		PoolSize:    cfg.GRPCPoolSize,
 		DialOptions: dialOpts,
 	})
@@ -361,63 +323,5 @@ func classifyPoolInitError(err error) string {
 		return "canceled"
 	default:
 		return "dial_failed"
-	}
-}
-
-func envOrDefault(key, fallback string) string {
-	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
-		return v
-	}
-	return fallback
-}
-
-func splitCSV(raw string) []string {
-	parts := strings.Split(raw, ",")
-	out := make([]string, 0, len(parts))
-	for _, p := range parts {
-		if trimmed := strings.TrimSpace(p); trimmed != "" {
-			out = append(out, trimmed)
-		}
-	}
-	return out
-}
-
-func envInt(key string, fallback int) int {
-	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
-		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 {
-			return parsed
-		}
-	}
-	return fallback
-}
-
-func envFloat(key string, fallback float64) float64 {
-	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
-		if parsed, err := strconv.ParseFloat(v, 64); err == nil {
-			return parsed
-		}
-	}
-	return fallback
-}
-
-func envDuration(key string, fallback time.Duration) time.Duration {
-	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
-		if parsed, err := time.ParseDuration(v); err == nil && parsed > 0 {
-			return parsed
-		}
-	}
-	return fallback
-}
-
-func parseLogLevel(raw string) slog.Level {
-	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case "debug":
-		return slog.LevelDebug
-	case "warn", "warning":
-		return slog.LevelWarn
-	case "error":
-		return slog.LevelError
-	default:
-		return slog.LevelInfo
 	}
 }
