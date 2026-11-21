@@ -62,7 +62,9 @@ If your cluster uses **External Secrets Operator (ESO)**, **HashiCorp Vault**, o
      - `CONFIG SET requirepass "<NEW_REDIS_PASSWORD>"`
      - `CONFIG SET masterauth "<NEW_REDIS_PASSWORD>"`
      - `CONFIG REWRITE` (or update the persistent Redis Secret/ConfigMap and perform a rolling restart if `CONFIG REWRITE` is disabled on immutable volumes).
-  2. **Update client Secret**: Update `REDIS_PASSWORD` in the GitHub Environment (or External Secret Store) and re-run the `Deploy` workflow (or apply the updated `rag-search-orchestrator-redis` Secret and run `kubectl rollout restart deployment/rag-search-orchestrator -n rag-search`, or `kubectl argo rollouts restart` when canary Rollouts are enabled).
+  2. **Update client Secret & restart workload**: Update `REDIS_PASSWORD` in the GitHub Environment (or External Secret Store), re-run the `Deploy` workflow (or apply the updated `rag-search-orchestrator-redis` Secret), and explicitly restart the workload so running pods pick up the new Secret even when the image tag is unchanged:
+     - Standard Deployment (`canary.enabled=false`): `kubectl rollout restart deployment/rag-search-orchestrator -n rag-search`
+     - Canary Rollout (`canary.enabled=true`): `kubectl argo rollouts restart rag-search-orchestrator -n rag-search`
   3. **Verify authentication & cluster health**: Before considering rotation complete, verify `redis-cli` authentication with the new password, confirm `cluster_state:ok` and `cluster_slots_assigned:16384` via `redis-cli cluster info`, and verify `rag-search-orchestrator` `/ready` checks pass.
 - **Logging Invariants**:
   - Per `.ai/security.md`, `REDIS_PASSWORD`, `Authorization` headers, bearer tokens, and raw `caller_acl_bitmap` bytes must never be logged.
