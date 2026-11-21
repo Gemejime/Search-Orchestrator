@@ -1,4 +1,7 @@
 {{- if .Values.canary.enabled }}
+{{- if not .Values.monitoring.enabled }}
+{{- fail "canary.enabled=true requires monitoring.enabled=true so ServiceMonitor provides the namespace and pod scrape labels required by AnalysisTemplate" }}
+{{- end }}
 apiVersion: argoproj.io/v1alpha1
 kind: AnalysisTemplate
 metadata:

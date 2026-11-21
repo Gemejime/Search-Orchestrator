@@ -685,14 +685,12 @@ func (uc *ExecuteSearchUseCase) emitAuditSpan(
 	span.TotalLatencyUs = totalDur.Microseconds()
 	span.TimestampUnixNs = time.Now().UnixNano()
 
-	count := len(permitted)
-	if count > len(span.PermittedDocIDs) {
-		count = len(span.PermittedDocIDs)
-	}
-	for i := 0; i < count; i++ {
+	var permittedCount uint8
+	for i := 0; i < len(permitted) && i < len(span.PermittedDocIDs); i++ {
 		span.PermittedDocIDs[i] = permitted[i].DocID
+		permittedCount++
 	}
-	span.PermittedCount = uint8(count)
+	span.PermittedCount = permittedCount
 
 	uc.deps.Telemetry.Emit(span)
 }
