@@ -4,7 +4,7 @@
 
 | Layer | Technology | Role & Operational Characteristics |
 | :--- | :--- | :--- |
-| **Language Runtime** | Go 1.23+ (64-bit) | Low-latency concurrent network I/O, `GOMEMLIMIT=3600MiB`, `GOGC=100` |
+| **Language Runtime** | Go 1.26.0 (64-bit) | Low-latency concurrent network I/O, `GOMEMLIMIT=3600MiB`, `GOGC=100` |
 | **Memory Discipline** | `sync.Pool` + Lock-Free Ring Buffer | Zero-alloc candidate slice reuse & non-blocking audit trace emission |
 | **Inbound Transport** | gRPC (Protobuf v3 / HTTP/2) & REST | Multiplexed HTTP/2 gRPC (`:50051`, 30s TCP keepalive) + OpenAPI 3.1 HTTP (`:8080`) |
 | **Entitlement ACL** | Native `uint32` Roaring Bitmaps | In-memory bitwise AND intersection ($<1\text{ ms}$, zero UUID translation) |
@@ -38,7 +38,7 @@ Aligned with `tasks/Production Grade Backend Concepts.pdf`:
 
 ### Layer 2: Data Persistence & State
 - **Caching (Tier 1 & Tier 2)**:
-  - Tier 1: Redis 7.2 Cluster stores TTL-bounded `uint32` chunk/doc candidate references keyed by normalized query hash.
+  - Tier 1: Redis 7.2 Cluster stores TTL-bounded caller-independent pre-ACL candidates (`uint32` `doc_id`, `chunk_id`, `parent_key`, passage `text`, and RRF `score`) keyed by normalized query hash.
   - Tier 2: Mandatory in-memory Roaring Bitmap intersection against `caller_acl_bitmap` on every cache hit before parent hydration.
 - **Parent Container Hydration**:
   - Pipelined Redis `MGET` on pre-warmed parent keys for Top-5 surviving chunks (800–1,500 tokens), bypassing database transaction pools.
@@ -81,8 +81,8 @@ Aligned with `tasks/Production Grade Backend Concepts.pdf`:
   - `search_roaring_bitmap_eval_duration_seconds` (histogram, microsecond-level ACL intersection)
 - **Production Alert Rules**:
   - *P99 Latency Violation (Page)*: `histogram_quantile(0.99, sum(rate(search_orchestrator_latency_seconds_bucket[5m])) by (le)) > 0.075` for `>3m`.
-  - *Triton Reranker Saturation (Warning)*: `rate(search_circuit_breaker_tripped_total[2m]) > 5` for `>1m`.
-  - *Search Shard Deadline Exceeded (Warning)*: `sum(rate(search_fanout_stage_errors_total{error="DeadlineExceeded"}[5m])) / sum(rate(search_orchestrator_requests_total[5m])) > 0.01`.
+  - *Triton Reranker Saturation (Warning)*: `increase(search_circuit_breaker_tripped_total[2m]) > 5` for `>1m`.
+  - *Search Shard Deadline Exceeded (Warning)*: `sum(rate(search_fanout_stage_errors_total{error="DeadlineExceeded"}[5m])) / (sum(rate(search_orchestrator_requests_total[5m])) > 0) > 0.01`.
   - *Cache Invalidation Coherence Lag (Warning — if local Pub/Sub bitmap cache enabled)*: `time() - search_last_bitmap_sync_timestamp_seconds > 5` for `>2m`. *(Not applicable when `caller_acl_bitmap` is supplied purely per-request by the Edge Gateway.)*
 - **Health Checks & Graceful Error Handling**:
   - `/healthz` (liveness) and `/ready` (readiness probing Redis, Triton, HNSW/BM25 pools, and drain state); sanitized client error responses.
