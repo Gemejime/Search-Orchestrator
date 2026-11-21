@@ -96,13 +96,15 @@ func NewRingBufferEmitter(capacity int, sink AuditSink, logger *slog.Logger) *Ri
 	}
 
 	slots := make([]ringSlot, pow2)
+	var initSeq uint64
 	for i := range slots {
-		slots[i].seq.Store(uint64(i))
+		slots[i].seq.Store(initSeq)
+		initSeq++
 	}
 
 	e := &RingBufferEmitter{
 		slots:  slots,
-		mask:   uint64(pow2 - 1),
+		mask:   initSeq - 1,
 		sink:   sink,
 		logger: logger,
 		notify: make(chan struct{}, 1),

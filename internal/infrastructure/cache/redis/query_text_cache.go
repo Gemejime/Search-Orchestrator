@@ -111,16 +111,20 @@ func (c *QueryTextCache) Set(ctx context.Context, cacheKey string, entry reposit
 // Format: [1B version][1B reranker_fallback][2B count] followed per candidate by
 // [4B doc_id][2B chunk_id_len][chunk_id][2B parent_key_len][parent_key][8B float64 score][4B text_len][text].
 func EncodeTier1CacheEntry(entry repository.Tier1CacheEntry) ([]byte, error) {
-	if len(entry.Candidates) > math.MaxUint16 {
+	countU16, ok := safeUint16(len(entry.Candidates))
+	if !ok {
 		return nil, fmt.Errorf("%w: too many candidates (%d)", ErrInvalidCachePayload, len(entry.Candidates))
 	}
 
 	size := 4
 	for _, cand := range entry.Candidates {
-		if len(cand.ChunkID) > math.MaxUint16 || len(cand.ParentKey) > math.MaxUint16 {
+		if _, ok := safeUint16(len(cand.ChunkID)); !ok {
 			return nil, fmt.Errorf("%w: candidate identifier exceeds uint16 length", ErrInvalidCachePayload)
 		}
-		if len(cand.Text) > math.MaxUint32 {
+		if _, ok := safeUint16(len(cand.ParentKey)); !ok {
+			return nil, fmt.Errorf("%w: candidate identifier exceeds uint16 length", ErrInvalidCachePayload)
+		}
+		if _, ok := safeUint32(len(cand.Text)); !ok {
 			return nil, fmt.Errorf("%w: candidate text exceeds uint32 length", ErrInvalidCachePayload)
 		}
 		size += 4 + 2 + len(cand.ChunkID) + 2 + len(cand.ParentKey) + 8 + 4 + len(cand.Text)
@@ -132,19 +136,27 @@ func EncodeTier1CacheEntry(entry repository.Tier1CacheEntry) ([]byte, error) {
 		fallbackByte = 1
 	}
 	buf = append(buf, tier1BinaryVersion, fallbackByte, 0, 0)
-	binary.BigEndian.PutUint16(buf[2:4], uint16(len(entry.Candidates)))
+	binary.BigEndian.PutUint16(buf[2:4], countU16)
 
 	for _, cand := range entry.Candidates {
 		var u32 [4]byte
 		binary.BigEndian.PutUint32(u32[:], cand.DocID)
 		buf = append(buf, u32[:]...)
 
+		chunkLen, ok := safeUint16(len(cand.ChunkID))
+		if !ok {
+			return nil, fmt.Errorf("%w: candidate identifier exceeds uint16 length", ErrInvalidCachePayload)
+		}
 		var u16 [2]byte
-		binary.BigEndian.PutUint16(u16[:], uint16(len(cand.ChunkID)))
+		binary.BigEndian.PutUint16(u16[:], chunkLen)
 		buf = append(buf, u16[:]...)
 		buf = append(buf, cand.ChunkID...)
 
-		binary.BigEndian.PutUint16(u16[:], uint16(len(cand.ParentKey)))
+		parentLen, ok := safeUint16(len(cand.ParentKey))
+		if !ok {
+			return nil, fmt.Errorf("%w: candidate identifier exceeds uint16 length", ErrInvalidCachePayload)
+		}
+		binary.BigEndian.PutUint16(u16[:], parentLen)
 		buf = append(buf, u16[:]...)
 		buf = append(buf, cand.ParentKey...)
 
@@ -152,11 +164,29 @@ func EncodeTier1CacheEntry(entry repository.Tier1CacheEntry) ([]byte, error) {
 		binary.BigEndian.PutUint64(u64[:], math.Float64bits(cand.Score))
 		buf = append(buf, u64[:]...)
 
-		binary.BigEndian.PutUint32(u32[:], uint32(len(cand.Text)))
+		textLen, ok := safeUint32(len(cand.Text))
+		if !ok {
+			return nil, fmt.Errorf("%w: candidate text exceeds uint32 length", ErrInvalidCachePayload)
+		}
+		binary.BigEndian.PutUint32(u32[:], textLen)
 		buf = append(buf, u32[:]...)
 		buf = append(buf, cand.Text...)
 	}
 	return buf, nil
+}
+
+func safeUint16(v int) (uint16, bool) {
+	if v < 0 || v > math.MaxUint16 {
+		return 0, false
+	}
+	return uint16(v), true
+}
+
+func safeUint32(v int) (uint32, bool) {
+	if v < 0 || v > math.MaxUint32 {
+		return 0, false
+	}
+	return uint32(v), true
 }
 
 // DecodeTier1CacheEntry decodes a binary Tier1CacheEntry payload produced by EncodeTier1CacheEntry.

@@ -72,18 +72,11 @@ func (c *HNSWClient) SearchDense(
 		return nil, err
 	}
 
-	boundedTopK := topK
-	if boundedTopK < 0 {
-		boundedTopK = 0
-	} else if boundedTopK > math.MaxInt32 {
-		boundedTopK = math.MaxInt32
-	}
-
 	client := downstreamv1.NewDenseSearchServiceClient(conn)
 	resp, err := client.Search(callCtx, &downstreamv1.DenseSearchServiceSearchRequest{
 		TenantId: tenantID,
 		Vector:   vector,
-		TopK:     int32(boundedTopK),
+		TopK:     clampTopK(topK),
 	})
 	if err != nil {
 		c.logger.WarnContext(ctx, "hnsw dense search rpc failed",
@@ -114,4 +107,14 @@ func (c *HNSWClient) SearchDense(
 		}
 	}
 	return out, nil
+}
+
+func clampTopK(v int) int32 {
+	if v < 0 {
+		return 0
+	}
+	if v > math.MaxInt32 {
+		return math.MaxInt32
+	}
+	return int32(v)
 }

@@ -94,17 +94,11 @@ func (c *BM25Client) SearchSparse(
 				shardErrs[idx] = err
 				return
 			}
-			boundedTopK := topK
-			if boundedTopK < 0 {
-				boundedTopK = 0
-			} else if boundedTopK > math.MaxInt32 {
-				boundedTopK = math.MaxInt32
-			}
 			client := downstreamv1.NewSparseSearchServiceClient(conn)
 			resp, err := client.Search(callCtx, &downstreamv1.SparseSearchServiceSearchRequest{
 				TenantId:  tenantID,
 				QueryText: queryText,
-				TopK:      int32(boundedTopK),
+				TopK:      clampTopK(topK),
 			})
 			if err != nil {
 				shardErrs[idx] = err
@@ -181,4 +175,14 @@ func (c *BM25Client) SearchSparse(
 	}
 
 	return merged, nil
+}
+
+func clampTopK(v int) int32 {
+	if v < 0 {
+		return 0
+	}
+	if v > math.MaxInt32 {
+		return math.MaxInt32
+	}
+	return int32(v)
 }
