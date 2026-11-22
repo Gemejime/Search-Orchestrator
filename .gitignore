@@ -1,0 +1,40 @@
+# Task specifications and architectural PDFs (local reference only)
+tasks/
+
+# Binaries and build outputs
+bin/
+dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Go test and coverage artifacts
+*.test
+*.out
+coverage.out
+coverage.html
+*.prof
+
+# Environment and secret files
+.env
+.env.prod
+.env.local
+.env.*.local
+*.pem
+*.key
+*.crt
+
+# IDE and OS files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Helm packaged charts and temporary files
+*.tgz
+tmp/
+logs/

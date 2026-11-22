@@ -1,0 +1,95 @@
+replicaCount: 14
+
+image:
+  repository: ghcr.io/rag-platform/rag-search-orchestrator
+  tag: "1.0.0"
+  pullPolicy: IfNotPresent
+
+nameOverride: ""
+fullnameOverride: ""
+
+service:
+  type: ClusterIP
+  httpPort: 8080
+  grpcPort: 50051
+
+resources:
+  requests:
+    cpu: 4000m
+    memory: 2Gi
+  limits:
+    cpu: 8000m
+    memory: 4Gi
+
+env:
+  GOMEMLIMIT: "3600MiB"
+  GOGC: "100"
+  HTTP_ADDR: ":8080"
+  GRPC_ADDR: ":50051"
+  SHUTDOWN_DRAIN_DELAY: "5s"
+  LOG_LEVEL: "info"
+  REDIS_ADDRS: "rag-search-orchestrator-redis-0.rag-search-orchestrator-redis-headless.rag-search.svc.cluster.local:6379,rag-search-orchestrator-redis-1.rag-search-orchestrator-redis-headless.rag-search.svc.cluster.local:6379,rag-search-orchestrator-redis-2.rag-search-orchestrator-redis-headless.rag-search.svc.cluster.local:6379"
+  CACHE_TTL: "5m"
+  HNSW_TARGETS: "hnsw-read-replica.rag-search.svc.cluster.local:50052"
+  BM25_TARGETS: "bm25-shard-0.rag-search.svc.cluster.local:50053,bm25-shard-1.rag-search.svc.cluster.local:50053"
+  GRPC_POOL_SIZE: "4"
+  TRITON_EMBED_TARGETS: "triton-embed.rag-inference.svc.cluster.local:8001"
+  TRITON_RERANK_TARGETS: "triton-rerank.rag-inference.svc.cluster.local:8001"
+  TRITON_EMBED_MODEL: "bge-m3-fp16"
+  TRITON_RERANK_MODEL: "bge-reranker-cross-encoder"
+  TRITON_RERANK_VERSION: ""
+  RERANK_TAU: "0.0"
+  RING_BUFFER_CAPACITY: "8192"
+
+redis:
+  existingSecret: ""
+  secretKey: "REDIS_PASSWORD"
+  password: ""
+
+terminationGracePeriodSeconds: 25
+
+autoscaling:
+  enabled: true
+  minReplicas: 14
+  maxReplicas: 32
+  targetCPUUtilizationPercentage: 70
+
+pdb:
+  enabled: true
+  minAvailable: 10
+
+canary:
+  enabled: false
+  analysis:
+    prometheusAddress: "http://prometheus-operated.monitoring.svc.cluster.local:9090"
+
+argocd:
+  project: "default"
+  repoURL: "https://github.com/rag-platform/rag-search-orchestrator.git"
+  targetRevision: "main"
+  path: "deployments/helm"
+  destinationServer: "https://kubernetes.default.svc"
+  destinationNamespace: "rag-search"
+
+networkPolicy:
+  enabled: true
+  edgeGatewayNamespaceSelector:
+    kubernetes.io/metadata.name: rag-edge
+  prometheusNamespaceSelector:
+    kubernetes.io/metadata.name: monitoring
+  egress:
+    redisNamespace: rag-search
+    redisPort: 6379
+    searchNamespace: rag-search
+    hnswPort: 50052
+    bm25Port: 50053
+    tritonNamespace: rag-inference
+    tritonPort: 8001
+    telemetryNamespace: rag-telemetry
+    telemetryPort: 4317
+
+monitoring:
+  enabled: false
+  interval: "15s"
+  bitmapSyncAlert:
+    enabled: false

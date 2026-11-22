@@ -1,0 +1,32 @@
+{{- if .Values.canary.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ include "rag-search-orchestrator.fullname" . }}
+  labels:
+    {{- include "rag-search-orchestrator.labels" . | nindent 4 }}
+spec:
+  project: {{ .Values.argocd.project | quote }}
+  source:
+    repoURL: {{ .Values.argocd.repoURL | quote }}
+    targetRevision: {{ .Values.argocd.targetRevision | quote }}
+    path: {{ .Values.argocd.path | quote }}
+    helm:
+      valueFiles:
+        - values.yaml
+      {{- range .Values.argocd.valueFiles }}
+        - {{ . | quote }}
+      {{- end }}
+      parameters:
+        - name: canary.enabled
+          value: {{ .Values.canary.enabled | quote }}
+  destination:
+    server: {{ .Values.argocd.destinationServer | quote }}
+    namespace: {{ .Values.argocd.destinationNamespace | quote }}
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+{{- end }}
