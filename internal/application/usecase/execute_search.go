@@ -157,7 +157,7 @@ func (uc *ExecuteSearchUseCase) runCascade(
 
 	// 2. Optional Tier 1/2 cache lookup with mandatory live Roaring Bitmap verification.
 	if uc.deps.QueryCache != nil {
-		if resp, hit, cacheErr := uc.tryTier1Cache(ctx, req.TraceID, qc, eval, totalStart); cacheErr != nil {
+		if diagResp, hit, cacheErr := uc.tryTier1Cache(ctx, req.TraceID, qc, eval, captureTrace, timings, totalStart); cacheErr != nil {
 			uc.deps.Logger.WarnContext(ctx, "tier1 cache lookup failed, proceeding to live fan-out",
 				slog.String("trace_id", req.TraceID),
 				slog.String("request_id", qc.RequestID),
@@ -166,12 +166,7 @@ func (uc *ExecuteSearchUseCase) runCascade(
 				slog.String("error", cacheErr.Error()),
 			)
 		} else if hit {
-			return dto.DiagnosticSearchResponse{
-				Response: resp,
-				ScoreTrace: dto.ScoreTrace{
-					StageTimingsMs: timings,
-				},
-			}, nil
+			return diagResp, nil
 		}
 	}
 
@@ -280,11 +275,13 @@ func (uc *ExecuteSearchUseCase) tryTier1Cache(
 	traceID string,
 	qc entity.QueryContext,
 	eval *acl.RoaringEvaluator,
+	captureTrace bool,
+	timings map[string]float64,
 	totalStart time.Time,
-) (dto.SearchResponse, bool, error) {
+) (dto.DiagnosticSearchResponse, bool, error) {
 	entry, hit, err := uc.deps.QueryCache.Get(ctx, qc.Tier1CacheKey())
 	if err != nil || !hit {
-		return dto.SearchResponse{}, false, err
+		return dto.DiagnosticSearchResponse{}, false, err
 	}
 
 	fusedBuf := uc.deps.CandidatePool.GetFusedCandidates()
@@ -309,11 +306,15 @@ func (uc *ExecuteSearchUseCase) tryTier1Cache(
 
 	aclStart := time.Now()
 	permitted := eval.FilterCandidates(*fusedBuf, *aclBuf)
-	uc.deps.Metrics.ObserveRoaringEval(time.Since(aclStart))
+	aclDur := time.Since(aclStart)
+	uc.deps.Metrics.ObserveRoaringEval(aclDur)
+	if captureTrace && timings != nil {
+		timings[ComponentRRFACL] = float64(aclDur.Microseconds()) / 1000.0
+	}
 
 	// Tier 2 rule: if fewer than TopK survive ACL, bypass to live fan-out without evicting cache.
 	if len(permitted) < qc.TopK {
-		return dto.SearchResponse{}, false, nil
+		return dto.DiagnosticSearchResponse{}, false, nil
 	}
 
 	rerankCap := len(permitted)
@@ -322,25 +323,34 @@ func (uc *ExecuteSearchUseCase) tryTier1Cache(
 	}
 	rerankInput := permitted[:rerankCap]
 
-	selected, rerankerFallback, _, _ := uc.rerankWithGuard(
-		ctx, traceID, qc, rerankInput, permitted, eval, false, nil,
+	selected, rerankerFallback, cbTripped, rerankLogits := uc.rerankWithGuard(
+		ctx, traceID, qc, rerankInput, permitted, eval, captureTrace, timings,
 	)
 
-	chunks, err := uc.hydrate(ctx, qc, selected, nil)
+	chunks, err := uc.hydrate(ctx, qc, selected, timings)
 	if err != nil {
-		return dto.SearchResponse{}, false, err
+		return dto.DiagnosticSearchResponse{}, false, err
 	}
 
 	totalDur := time.Since(totalStart)
 	uc.emitAuditSpan(traceID, qc, true, permitted, rerankerFallback, totalDur)
 
-	return dto.SearchResponse{
-		RequestID:        qc.RequestID,
-		TenantID:         qc.TenantID,
-		CacheHit:         true,
-		RerankerFallback: rerankerFallback,
-		Chunks:           chunks,
-		LatencyMs:        float64(totalDur.Microseconds()) / 1000.0,
+	return dto.DiagnosticSearchResponse{
+		Response: dto.SearchResponse{
+			RequestID:        qc.RequestID,
+			TenantID:         qc.TenantID,
+			CacheHit:         true,
+			RerankerFallback: rerankerFallback,
+			Chunks:           chunks,
+			LatencyMs:        float64(totalDur.Microseconds()) / 1000.0,
+		},
+		ScoreTrace: dto.ScoreTrace{
+			RRFCount:              safeInt32(len(entry.Candidates)),
+			ACLPermittedCount:     safeInt32(len(permitted)),
+			CircuitBreakerTripped: cbTripped,
+			RerankLogits:          rerankLogits,
+			StageTimingsMs:        timings,
+		},
 	}, true, nil
 }
 

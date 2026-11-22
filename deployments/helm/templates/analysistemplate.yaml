@@ -2,6 +2,10 @@
 {{- if not .Values.monitoring.enabled }}
 {{- fail "canary.enabled=true requires monitoring.enabled=true so ServiceMonitor provides the namespace and pod scrape labels required by AnalysisTemplate" }}
 {{- end }}
+{{- $fullname := include "rag-search-orchestrator.fullname" . -}}
+{{- if gt (len $fullname) 46 }}
+{{- fail (printf "canary.enabled=true requires fullname length <= 46 (got %d) so pod names retain the full -<canary-hash>- suffix; set fullnameOverride" (len $fullname)) }}
+{{- end }}
 apiVersion: argoproj.io/v1alpha1
 kind: AnalysisTemplate
 metadata:

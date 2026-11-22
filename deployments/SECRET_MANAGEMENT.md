@@ -58,14 +58,19 @@ If your cluster uses **External Secrets Operator (ESO)**, **HashiCorp Vault**, o
 ## 6. Secret Rotation & Logging Hygiene
 
 - **Rotating `REDIS_PASSWORD`**:
-  1. **Coordinated server-side password update**: On every Redis Cluster node (primaries and replicas), update the active authentication, replication credentials, and persisted configuration in lockstep so replication links do not break:
+  1. **Add the new password without invalidating the old one**: On every Redis Cluster node (primaries and replicas), add the new credential alongside the existing password using Redis ACLs so active clients and replication links continue authenticating during migration:
+     - `ACL SETUSER default +@all on >"<OLD_REDIS_PASSWORD>" >"<NEW_REDIS_PASSWORD>"`
+     - `CONFIG REWRITE` (if writable).
+  2. **Migrate replication credentials & client Secret**:
+     - On all nodes, update replication authentication: `CONFIG SET masterauth "<NEW_REDIS_PASSWORD>"` and `CONFIG REWRITE` (or update the persistent Redis Secret/ConfigMap).
+     - Update `REDIS_PASSWORD` in the GitHub Environment (or External Secret Store), re-run the `Deploy` workflow (or apply the updated `rag-search-orchestrator-redis` Secret), and explicitly restart the workload so running pods pick up the new Secret even when the image tag is unchanged:
+       - Standard Deployment (`canary.enabled=false`): `kubectl rollout restart deployment/rag-search-orchestrator -n rag-search`
+       - Canary Rollout (`canary.enabled=true`): `kubectl argo rollouts restart rag-search-orchestrator -n rag-search`
+  3. **Verify authentication & cluster health**: Before removing the old credential, verify `redis-cli` authentication with `<NEW_REDIS_PASSWORD>`, confirm `cluster_state:ok` and `cluster_slots_assigned:16384` via `redis-cli cluster info`, and verify all `rag-search-orchestrator` pods pass `/ready` checks.
+  4. **Remove the old password**: Once all clients and replicas are verified on `<NEW_REDIS_PASSWORD>`, revoke the old credential on every Redis node and persist:
+     - `ACL SETUSER default -"<OLD_REDIS_PASSWORD>"`
      - `CONFIG SET requirepass "<NEW_REDIS_PASSWORD>"`
-     - `CONFIG SET masterauth "<NEW_REDIS_PASSWORD>"`
-     - `CONFIG REWRITE` (or update the persistent Redis Secret/ConfigMap and perform a rolling restart if `CONFIG REWRITE` is disabled on immutable volumes).
-  2. **Update client Secret & restart workload**: Update `REDIS_PASSWORD` in the GitHub Environment (or External Secret Store), re-run the `Deploy` workflow (or apply the updated `rag-search-orchestrator-redis` Secret), and explicitly restart the workload so running pods pick up the new Secret even when the image tag is unchanged:
-     - Standard Deployment (`canary.enabled=false`): `kubectl rollout restart deployment/rag-search-orchestrator -n rag-search`
-     - Canary Rollout (`canary.enabled=true`): `kubectl argo rollouts restart rag-search-orchestrator -n rag-search`
-  3. **Verify authentication & cluster health**: Before considering rotation complete, verify `redis-cli` authentication with the new password, confirm `cluster_state:ok` and `cluster_slots_assigned:16384` via `redis-cli cluster info`, and verify `rag-search-orchestrator` `/ready` checks pass.
+     - `CONFIG REWRITE`
 - **Logging Invariants**:
   - Per `.ai/security.md`, `REDIS_PASSWORD`, `Authorization` headers, bearer tokens, and raw `caller_acl_bitmap` bytes must never be logged.
   - `internal/config/config.go` marks `RedisPassword` with `#nosec G117` and never passes it to `slog`.

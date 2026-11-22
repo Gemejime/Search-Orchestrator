@@ -564,6 +564,24 @@ func TestExecuteSearch_ColdThenTier1CacheHitPreservesTextForReranking(t *testing
 	if len(hitResp.Chunks) != 2 || hitResp.Chunks[0].DocID != 5 || hitResp.Chunks[1].DocID != 4 {
 		t.Fatalf("expected cache-hit reranked winners [5, 4], got %+v", hitResp.Chunks)
 	}
+
+	diagUC := usecase.NewExecuteDiagnosticSearchUseCase(uc)
+	diagResp, err := diagUC.Execute(context.Background(), dto.DiagnosticSearchRequest(req))
+	if err != nil {
+		t.Fatalf("diagnostic cache-hit Execute failed: %v", err)
+	}
+	if !diagResp.Response.CacheHit {
+		t.Fatal("expected diagnostic CacheHit=true")
+	}
+	if diagResp.ScoreTrace.ACLPermittedCount != 5 || diagResp.ScoreTrace.RRFCount != 5 {
+		t.Fatalf("expected diagnostic counts 5/5 on cache hit, got %+v", diagResp.ScoreTrace)
+	}
+	if len(diagResp.ScoreTrace.RerankLogits) != 5 {
+		t.Fatalf("expected 5 rerank logits on diagnostic cache hit, got %d", len(diagResp.ScoreTrace.RerankLogits))
+	}
+	if _, ok := diagResp.ScoreTrace.StageTimingsMs[usecase.ComponentTritonRerank]; !ok {
+		t.Fatalf("expected triton_rerank timing on diagnostic cache hit, got %+v", diagResp.ScoreTrace.StageTimingsMs)
+	}
 }
 
 func TestExecuteDiagnosticSearch_ScoreTrace(t *testing.T) {
